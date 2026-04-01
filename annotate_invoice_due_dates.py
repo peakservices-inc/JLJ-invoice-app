@@ -200,8 +200,8 @@ class DueDateRuleConfig:
     label_keywords: List[str] = field(default_factory=default_due_date_keywords)
     font_family: str = "Arial"
     font_size_adjust: int = 2
-    line_gap_adjust: int = 0
-    x_offset: int = 0
+    line_gap_adjust: int = 6
+    x_offset: int = -30
     y_offset: int = 0
     mirrored_margin: bool = True
 

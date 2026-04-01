@@ -15,6 +15,67 @@ The project currently includes two ways to use the logic:
 - `annotate_invoice_due_dates.py`: direct script usage
 - `jlj_invoice_desktop.py`: desktop application with a configurable UI
 
+## Stack Overview
+
+This project is a Windows desktop OCR application built on a small Python stack:
+
+- `Python 3.14`: application runtime
+- `PyMuPDF (fitz)`: opens PDFs, renders pages to images, and rebuilds the processed PDF
+- `Pillow`: image drawing and text rendering
+- `pytesseract`: Python bridge to Tesseract OCR
+- `Tesseract OCR`: extracts text from scanned invoice images
+- `PySide6`: desktop application UI
+- `PyInstaller`: packages the Python app into a Windows app folder
+- `Inno Setup`: builds the Windows installer
+
+## How The Stack Works
+
+At a high level, the project has four layers:
+
+1. `OCR and annotation engine`
+   `annotate_invoice_due_dates.py` handles PDF rendering, OCR, invoice date detection, due-date calculation, note placement, and saving the finished PDF.
+
+2. `Rule configuration layer`
+   The due-date and note rules are defined as dataclasses in `annotate_invoice_due_dates.py`. The desktop app edits these rule objects and passes them to the backend before processing.
+
+3. `Desktop UI layer`
+   `jlj_invoice_desktop.py` gives office users a simple front end. The main window focuses on:
+   - adding files
+   - choosing the output folder
+   - clicking `Proceed`
+   - viewing results
+
+   Advanced options such as OCR settings and rule editing are moved into the Settings dialog.
+
+4. `Packaging and installer layer`
+   `build_app.ps1` runs PyInstaller to create the packaged app and optionally runs Inno Setup to create the installer.
+
+### Processing flow
+
+When a user clicks `Proceed`, the app does this:
+
+1. validates the selected files, output folder, enabled rules, and Tesseract path
+2. starts a background worker so the UI does not freeze
+3. converts the selected rules into a backend processing config
+4. renders each PDF page to an image with PyMuPDF
+5. runs OCR on that image with Tesseract
+6. finds the invoice date using the configured detection mode
+7. calculates the due date
+8. draws the due date and note onto the page image
+9. rebuilds a new PDF from the annotated page images
+10. saves the finished files and shows them in the Results panel
+
+### Key code entry points
+
+- Backend rule definitions: `annotate_invoice_due_dates.py`
+- Date detection: `find_invoice_date_match`
+- Due-date drawing: `draw_due_date_block`
+- Note drawing: `draw_note_block`
+- PDF pipeline: `process_pdf`
+- Desktop worker thread: `ProcessWorker` in `jlj_invoice_desktop.py`
+- Main app window: `MainWindow` in `jlj_invoice_desktop.py`
+- Settings dialog UI: `_build_settings_dialog` in `jlj_invoice_desktop.py`
+
 ## Project Files
 
 - `annotate_invoice_due_dates.py`: OCR and PDF annotation engine
@@ -119,10 +180,16 @@ py .\jlj_invoice_desktop.py
 
 1. Add one or more PDF files.
 2. Choose the output folder.
-3. Confirm the Tesseract path.
-4. Review or edit the rules.
-5. Click `Process Files`.
-6. Open the processed PDFs from the results pane.
+3. Click `Proceed`.
+4. Open the processed PDFs from the results pane.
+
+If needed, click `Settings` to:
+
+- change the Tesseract path
+- change OCR DPI and JPEG quality
+- edit rules
+- change due-date spacing and placement
+- change note appearance
 
 ### Current starter rules
 
@@ -130,6 +197,16 @@ py .\jlj_invoice_desktop.py
 - `Bottom Note`: adds a configurable note near the bottom of the page
 
 The UI is rule-driven, so new rule types can be added later without redesigning the main workflow.
+
+### Current due-date defaults
+
+The default due-date rule currently uses:
+
+- `30` days after the invoice date
+- default horizontal adjustment of `-30`
+- default line spacing of `1 space` between `Due Date` and the date below it
+
+Users can adjust these values from `Settings > Rules`.
 
 ### App data
 
@@ -199,7 +276,7 @@ Users can configure rule appearance from the app, including:
 
 - font family
 - text size adjustments
-- spacing
+- line spacing between the due-date label and value
 - alignment
 - x/y offsets
 - label text
@@ -235,4 +312,3 @@ Check:
 - This repository is Windows-focused.
 - Font detection currently relies on Windows font files under `C:\Windows\Fonts`.
 - OCR accuracy depends on scan quality and Tesseract results.
-

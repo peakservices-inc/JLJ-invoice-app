@@ -23,6 +23,7 @@ APP_DIR = Path(os.environ.get("APPDATA", str(Path.home()))).joinpath(
 STATE_PATH = APP_DIR / "settings.json"
 LOG_PATH = APP_DIR / "app.log"
 RuleObject = backend.RuleConfig
+SPACE_STEP_PX = 6
 
 
 def ensure_app_dir() -> None:
@@ -97,6 +98,18 @@ def sanitize_rule(rule: RuleObject) -> RuleObject:
         rule.font_family = safe_font_family_name(rule.font_family or "Arial")
         return rule
     return rule
+
+
+def pixels_to_spaces(value: int) -> int:
+    return int(round(value / float(SPACE_STEP_PX)))
+
+
+def spaces_to_pixels(value: int) -> int:
+    return int(value) * SPACE_STEP_PX
+
+
+def project_readme_path() -> Path:
+    return Path(__file__).resolve().parent / "README.md"
 
 
 class ProcessWorker(QtCore.QObject):
@@ -239,20 +252,33 @@ class DueDateRuleEditor(QtWidgets.QWidget):
         self.font_family = QtWidgets.QFontComboBox()
         self.font_size_adjust = QtWidgets.QSpinBox()
         self.font_size_adjust.setRange(-12, 24)
-        self.line_gap_adjust = QtWidgets.QSpinBox()
-        self.line_gap_adjust.setRange(-20, 20)
-        self.x_offset = QtWidgets.QSpinBox()
-        self.x_offset.setRange(-500, 500)
-        self.y_offset = QtWidgets.QSpinBox()
-        self.y_offset.setRange(-500, 500)
-        self.mirrored_margin = QtWidgets.QCheckBox("Match right-side spacing to the left-side date spacing")
+        self.line_spacing_spaces = QtWidgets.QSpinBox()
+        self.line_spacing_spaces.setRange(-10, 10)
+        self.line_spacing_spaces.setSuffix(" spaces")
+        self.line_spacing_spaces.setSpecialValueText("Default")
+        self.horizontal_spaces = QtWidgets.QSpinBox()
+        self.horizontal_spaces.setRange(-60, 60)
+        self.horizontal_spaces.setSuffix(" spaces")
+        self.horizontal_spaces.setSpecialValueText("Default")
+        self.vertical_spaces = QtWidgets.QSpinBox()
+        self.vertical_spaces.setRange(-60, 60)
+        self.vertical_spaces.setSuffix(" spaces")
+        self.vertical_spaces.setSpecialValueText("Default")
+        self.mirrored_margin = QtWidgets.QCheckBox("Use the same right-side spacing as the invoice date on the left")
+
+        spacing_help = QtWidgets.QLabel(
+            "Recommended default uses the original script spacing. Line spacing changes the gap between 'Due Date' and the date below it. Positive numbers add more gap."
+        )
+        spacing_help.setWordWrap(True)
+        spacing_help.setObjectName("CardSubtitle")
 
         advanced_form.addRow("Font family", self.font_family)
         advanced_form.addRow("Text size adjustment", self.font_size_adjust)
-        advanced_form.addRow("Space between label and value", self.line_gap_adjust)
-        advanced_form.addRow("Move left or right", self.x_offset)
-        advanced_form.addRow("Move up or down", self.y_offset)
+        advanced_form.addRow("Space between 'Due Date' and the date", self.line_spacing_spaces)
+        advanced_form.addRow("Move right (+) or left (-)", self.horizontal_spaces)
+        advanced_form.addRow("Move down (+) or up (-)", self.vertical_spaces)
         advanced_form.addRow("", self.mirrored_margin)
+        advanced_form.addRow("", spacing_help)
 
         for widget in [
             self.name_edit,
@@ -262,9 +288,9 @@ class DueDateRuleEditor(QtWidgets.QWidget):
             self.label_keywords,
             self.font_family,
             self.font_size_adjust,
-            self.line_gap_adjust,
-            self.x_offset,
-            self.y_offset,
+            self.line_spacing_spaces,
+            self.horizontal_spaces,
+            self.vertical_spaces,
         ]:
             set_compact_input_height(widget)
 
@@ -280,9 +306,9 @@ class DueDateRuleEditor(QtWidgets.QWidget):
             self.label_keywords,
             self.font_family,
             self.font_size_adjust,
-            self.line_gap_adjust,
-            self.x_offset,
-            self.y_offset,
+            self.line_spacing_spaces,
+            self.horizontal_spaces,
+            self.vertical_spaces,
             self.mirrored_margin,
         ]:
             if isinstance(widget, QtWidgets.QAbstractButton):
@@ -309,9 +335,9 @@ class DueDateRuleEditor(QtWidgets.QWidget):
             QtCore.QSignalBlocker(self.label_keywords),
             QtCore.QSignalBlocker(self.font_family),
             QtCore.QSignalBlocker(self.font_size_adjust),
-            QtCore.QSignalBlocker(self.line_gap_adjust),
-            QtCore.QSignalBlocker(self.x_offset),
-            QtCore.QSignalBlocker(self.y_offset),
+            QtCore.QSignalBlocker(self.line_spacing_spaces),
+            QtCore.QSignalBlocker(self.horizontal_spaces),
+            QtCore.QSignalBlocker(self.vertical_spaces),
             QtCore.QSignalBlocker(self.mirrored_margin),
         ]
         self.enabled.setChecked(rule.enabled)
@@ -322,9 +348,9 @@ class DueDateRuleEditor(QtWidgets.QWidget):
         self.label_keywords.setText(", ".join(rule.label_keywords))
         self.font_family.setCurrentFont(QtGui.QFont(safe_font_family_name(rule.font_family or "Arial")))
         self.font_size_adjust.setValue(rule.font_size_adjust)
-        self.line_gap_adjust.setValue(rule.line_gap_adjust)
-        self.x_offset.setValue(rule.x_offset)
-        self.y_offset.setValue(rule.y_offset)
+        self.line_spacing_spaces.setValue(pixels_to_spaces(rule.line_gap_adjust))
+        self.horizontal_spaces.setValue(pixels_to_spaces(rule.x_offset))
+        self.vertical_spaces.setValue(pixels_to_spaces(rule.y_offset))
         self.mirrored_margin.setChecked(rule.mirrored_margin)
         del blockers
 
@@ -343,9 +369,9 @@ class DueDateRuleEditor(QtWidgets.QWidget):
         ] or backend.default_due_date_keywords()
         self._rule.font_family = safe_font_family_name(self.font_family.currentFont().family())
         self._rule.font_size_adjust = self.font_size_adjust.value()
-        self._rule.line_gap_adjust = self.line_gap_adjust.value()
-        self._rule.x_offset = self.x_offset.value()
-        self._rule.y_offset = self.y_offset.value()
+        self._rule.line_gap_adjust = spaces_to_pixels(self.line_spacing_spaces.value())
+        self._rule.x_offset = spaces_to_pixels(self.horizontal_spaces.value())
+        self._rule.y_offset = spaces_to_pixels(self.vertical_spaces.value())
         self._rule.mirrored_margin = self.mirrored_margin.isChecked()
 
 
@@ -608,7 +634,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle(APP_TITLE)
-        self.resize(1480, 920)
+        self.resize(1240, 860)
 
         self.rules: List[RuleObject] = starter_rules()
         self.input_files: List[str] = []
@@ -631,22 +657,33 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(scroll)
 
         root = QtWidgets.QWidget()
-        root.setMinimumSize(1240, 860)
+        root.setMinimumSize(1020, 760)
         scroll.setWidget(root)
         outer = QtWidgets.QVBoxLayout(root)
         outer.setContentsMargins(18, 18, 18, 18)
         outer.setSpacing(14)
 
+        header_row = QtWidgets.QHBoxLayout()
+        header_row.setSpacing(12)
+
+        title_block = QtWidgets.QVBoxLayout()
+        title_block.setSpacing(6)
         title = QtWidgets.QLabel(APP_TITLE)
         title.setObjectName("HeroTitle")
         subtitle = QtWidgets.QLabel(
-            "A simpler PDF rule studio for office teams. Start with the starter rules, change only what you need, and keep advanced settings tucked away."
+            "Add files, choose an output folder, and click Proceed. OCR options and rule editing are tucked into Settings."
         )
         subtitle.setObjectName("HeroSubtitle")
         subtitle.setWordWrap(True)
+        title_block.addWidget(title)
+        title_block.addWidget(subtitle)
 
-        outer.addWidget(title)
-        outer.addWidget(subtitle)
+        self.settings_button = QtWidgets.QPushButton("Settings")
+        self.settings_button.setMinimumWidth(140)
+
+        header_row.addLayout(title_block, 1)
+        header_row.addWidget(self.settings_button, 0, QtCore.Qt.AlignTop)
+        outer.addLayout(header_row)
 
         splitter = QtWidgets.QSplitter()
         splitter.setOrientation(QtCore.Qt.Horizontal)
@@ -663,7 +700,8 @@ class MainWindow(QtWidgets.QMainWindow):
             "Step 1: Files",
             "Add one or more invoice PDFs to process.",
         )
-        left_layout.addWidget(upload_card)
+        upload_card.setMinimumHeight(360)
+        left_layout.addWidget(upload_card, 1)
 
         self.input_list = QtWidgets.QListWidget()
         upload_card.body_layout.addWidget(self.input_list)
@@ -677,13 +715,14 @@ class MainWindow(QtWidgets.QMainWindow):
         upload_buttons.addWidget(self.clear_files_button)
         upload_card.body_layout.addLayout(upload_buttons)
 
-        settings_card = CardFrame(
-            "Step 2: Process",
-            "Choose where finished PDFs should be saved. Most users can leave the OCR settings as they are.",
+        output_card = CardFrame(
+            "Step 2: Output Folder",
+            "Choose where finished PDFs should be saved.",
         )
-        left_layout.addWidget(settings_card)
+        left_layout.addWidget(output_card)
 
-        settings_form = QtWidgets.QFormLayout()
+        output_form = QtWidgets.QFormLayout()
+        configure_form_layout(output_form)
         self.output_dir_edit = QtWidgets.QLineEdit(str(Path("OUTPUT").resolve()))
         self.output_dir_button = QtWidgets.QPushButton("Browse")
         output_dir_row = QtWidgets.QHBoxLayout()
@@ -691,6 +730,168 @@ class MainWindow(QtWidgets.QMainWindow):
         output_dir_row.addWidget(self.output_dir_button)
         output_dir_wrap = QtWidgets.QWidget()
         output_dir_wrap.setLayout(output_dir_row)
+        output_form.addRow("Save Processed Files To", output_dir_wrap)
+        output_card.body_layout.addLayout(output_form)
+
+        action_card = CardFrame(
+            "Step 3: Proceed",
+            "When your files are ready, click Proceed. Use Settings for OCR details and rule changes.",
+        )
+        left_layout.addWidget(action_card)
+
+        self.settings_summary_label = QtWidgets.QLabel()
+        self.settings_summary_label.setWordWrap(True)
+        self.settings_summary_label.setObjectName("CardSubtitle")
+        action_card.body_layout.addWidget(self.settings_summary_label)
+
+        proceed_row = QtWidgets.QHBoxLayout()
+        self.process_button = QtWidgets.QPushButton("Proceed")
+        self.process_button.setMinimumHeight(42)
+        self.progress_bar = QtWidgets.QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        proceed_row.addWidget(self.process_button)
+        proceed_row.addWidget(self.progress_bar, 1)
+        action_card.body_layout.addLayout(proceed_row)
+
+        right_column = QtWidgets.QWidget()
+        right_layout = QtWidgets.QVBoxLayout(right_column)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(14)
+        splitter.addWidget(right_column)
+
+        results_card = CardFrame("Results", "Processed files appear here after each run.")
+        results_card.setMinimumHeight(420)
+        right_layout.addWidget(results_card, 1)
+
+        self.output_list = QtWidgets.QListWidget()
+        results_card.body_layout.addWidget(self.output_list)
+
+        output_buttons = QtWidgets.QHBoxLayout()
+        self.open_output_button = QtWidgets.QPushButton("Open Selected")
+        self.open_output_folder_button = QtWidgets.QPushButton("Open Folder")
+        output_buttons.addWidget(self.open_output_button)
+        output_buttons.addWidget(self.open_output_folder_button)
+        results_card.body_layout.addLayout(output_buttons)
+
+        self.log_output = QtWidgets.QPlainTextEdit()
+        self.log_output.setReadOnly(True)
+        self.log_output.setMaximumBlockCount(400)
+        self.log_output.setMinimumHeight(90)
+        self.log_output.setMaximumHeight(120)
+        self.log_output.setPlaceholderText("Processing details and errors will appear here.")
+        outer.addWidget(self.log_output, 0)
+
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([520, 620])
+
+        self._build_settings_dialog()
+
+        self.add_files_button.clicked.connect(self._add_files)
+        self.remove_file_button.clicked.connect(self._remove_selected_files)
+        self.clear_files_button.clicked.connect(self._clear_files)
+        self.output_dir_button.clicked.connect(self._pick_output_dir)
+        self.output_dir_edit.editingFinished.connect(self._save_state)
+        self.settings_button.clicked.connect(self._open_settings)
+        self.process_button.clicked.connect(self._start_processing)
+        self.open_output_button.clicked.connect(self._open_selected_output)
+        self.open_output_folder_button.clicked.connect(self._open_output_folder)
+
+        self.due_editor.changed.connect(self._sync_active_rule)
+        self.note_editor.changed.connect(self._sync_active_rule)
+
+    def _build_setting_label(self, text: str, help_key: Optional[str] = None) -> QtWidgets.QWidget:
+        container = QtWidgets.QWidget()
+        layout = QtWidgets.QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        label = QtWidgets.QLabel(text)
+        layout.addWidget(label)
+
+        if help_key:
+            button = QtWidgets.QToolButton()
+            button.setObjectName("HelpButton")
+            button.setText("?")
+            button.setAutoRaise(False)
+            button.setCursor(QtCore.Qt.PointingHandCursor)
+            button.clicked.connect(lambda *_: self._show_setting_help(help_key))
+            layout.addWidget(button, 0, QtCore.Qt.AlignVCenter)
+
+        layout.addStretch(1)
+        return container
+
+    def _show_setting_help(self, help_key: str) -> None:
+        docs_path = project_readme_path()
+        if help_key == "dpi":
+            title = "Render DPI Help"
+            message = (
+                "Render DPI controls how sharply each PDF page is converted into an image before OCR runs.\n\n"
+                "Higher DPI usually helps Tesseract read dates more accurately and can improve rule placement, "
+                "especially on faint or blurry scans. The tradeoff is slower processing and more memory use.\n\n"
+                "Lower DPI is faster, but OCR can miss text or place rules less precisely on poor-quality scans.\n\n"
+                "This setting changes OCR quality and placement accuracy. It does not change the rule logic itself."
+            )
+        elif help_key == "jpeg_quality":
+            title = "JPEG Quality Help"
+            message = (
+                "JPEG Quality controls how clean the rebuilt PDF pages look after the rules are drawn.\n\n"
+                "Higher quality keeps the original scan and added rule text sharper, but creates larger output files.\n\n"
+                "Lower quality makes smaller files, but can introduce blur or compression artifacts that affect how natural "
+                "the invoice, due date, and note appear."
+            )
+        else:
+            return
+
+        box = QtWidgets.QMessageBox(self.settings_dialog)
+        box.setWindowTitle(title)
+        box.setIcon(QtWidgets.QMessageBox.Information)
+        box.setText(message)
+        box.setStandardButtons(QtWidgets.QMessageBox.Close)
+
+        docs_button = None
+        if docs_path.exists():
+            docs_button = box.addButton("Open Docs", QtWidgets.QMessageBox.ActionRole)
+
+        box.exec()
+
+        if docs_button is not None and box.clickedButton() is docs_button and hasattr(os, "startfile"):
+            os.startfile(str(docs_path))
+
+    def _build_settings_dialog(self) -> None:
+        self.settings_dialog = QtWidgets.QDialog(self)
+        self.settings_dialog.setWindowTitle(f"{APP_TITLE} - Settings")
+        self.settings_dialog.resize(1040, 760)
+
+        layout = QtWidgets.QVBoxLayout(self.settings_dialog)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(12)
+
+        intro = QtWidgets.QLabel(
+            "Advanced options live here. Change OCR details or edit the rules that are applied when you click Proceed."
+        )
+        intro.setWordWrap(True)
+        intro.setObjectName("CardSubtitle")
+        layout.addWidget(intro)
+
+        tabs = QtWidgets.QTabWidget()
+        tabs.setDocumentMode(True)
+        layout.addWidget(tabs, 1)
+
+        processing_page = QtWidgets.QWidget()
+        processing_layout = QtWidgets.QVBoxLayout(processing_page)
+        processing_layout.setContentsMargins(0, 0, 0, 0)
+        processing_layout.setSpacing(14)
+
+        processing_card = CardFrame(
+            "OCR Settings",
+            "Most users can leave these alone. Change them only when needed.",
+        )
+        processing_layout.addWidget(processing_card)
+
+        processing_form = QtWidgets.QFormLayout()
+        configure_form_layout(processing_form)
 
         self.tesseract_edit = QtWidgets.QLineEdit(default_tesseract_path())
         self.tesseract_button = QtWidgets.QPushButton("Browse")
@@ -707,23 +908,30 @@ class MainWindow(QtWidgets.QMainWindow):
         self.quality_spin.setRange(50, 100)
         self.quality_spin.setValue(95)
 
-        settings_form.addRow("Save Processed Files To", output_dir_wrap)
-        settings_form.addRow("OCR Program (Tesseract)", tesseract_wrap)
-        settings_form.addRow("Render DPI", self.dpi_spin)
-        settings_form.addRow("JPEG Quality", self.quality_spin)
-        settings_card.body_layout.addLayout(settings_form)
+        set_compact_input_height(self.tesseract_edit)
+        set_compact_input_height(self.dpi_spin)
+        set_compact_input_height(self.quality_spin)
 
-        center_column = QtWidgets.QWidget()
-        center_layout = QtWidgets.QVBoxLayout(center_column)
-        center_layout.setContentsMargins(0, 0, 0, 0)
-        center_layout.setSpacing(14)
-        splitter.addWidget(center_column)
+        processing_form.addRow(self._build_setting_label("OCR Program (Tesseract)"), tesseract_wrap)
+        processing_form.addRow(self._build_setting_label("Render DPI", "dpi"), self.dpi_spin)
+        processing_form.addRow(self._build_setting_label("JPEG Quality", "jpeg_quality"), self.quality_spin)
+        processing_card.body_layout.addLayout(processing_form)
+        processing_layout.addStretch(1)
+
+        rules_page = QtWidgets.QWidget()
+        rules_layout = QtWidgets.QVBoxLayout(rules_page)
+        rules_layout.setContentsMargins(0, 0, 0, 0)
+        rules_layout.setSpacing(14)
+
+        rules_splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+        rules_splitter.setChildrenCollapsible(False)
+        rules_layout.addWidget(rules_splitter, 1)
 
         rules_card = CardFrame(
             "Rules",
             "Use Add Rule for any available rule type. Starter rules can be edited, removed, or restored.",
         )
-        center_layout.addWidget(rules_card)
+        rules_splitter.addWidget(rules_card)
 
         self.rule_list = QtWidgets.QListWidget()
         rules_card.body_layout.addWidget(self.rule_list)
@@ -737,22 +945,11 @@ class MainWindow(QtWidgets.QMainWindow):
         rule_buttons.addWidget(self.reset_rules_button)
         rules_card.body_layout.addLayout(rule_buttons)
 
-        right_column = QtWidgets.QWidget()
-        right_layout = QtWidgets.QVBoxLayout(right_column)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(14)
-        splitter.addWidget(right_column)
-
-        right_splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
-        right_splitter.setChildrenCollapsible(False)
-        right_layout.addWidget(right_splitter, 1)
-
         editor_card = CardFrame(
             "Rule Settings",
             "Basic settings are shown first. Use the Advanced tab only when you need font and spacing control.",
         )
-        editor_card.setMinimumHeight(360)
-        right_splitter.addWidget(editor_card)
+        rules_splitter.addWidget(editor_card)
 
         self.rule_summary_label = QtWidgets.QLabel("Select a rule to change its settings.")
         self.rule_summary_label.setObjectName("CardSubtitle")
@@ -771,61 +968,43 @@ class MainWindow(QtWidgets.QMainWindow):
         self.editor_stack.addWidget(self.empty_editor)
         self.editor_stack.addWidget(self.due_editor)
         self.editor_stack.addWidget(self.note_editor)
-        self.editor_stack.setMinimumHeight(360)
+        self.editor_stack.setMinimumHeight(420)
         editor_card.body_layout.addWidget(self.editor_stack)
 
-        output_card = CardFrame("Step 3: Results", "Processed files appear here after each run.")
-        output_card.setMinimumHeight(220)
-        right_splitter.addWidget(output_card)
+        rules_splitter.setStretchFactor(0, 1)
+        rules_splitter.setStretchFactor(1, 2)
+        rules_splitter.setSizes([320, 620])
 
-        self.output_list = QtWidgets.QListWidget()
-        output_card.body_layout.addWidget(self.output_list)
+        tabs.addTab(processing_page, "OCR")
+        tabs.addTab(rules_page, "Rules")
 
-        output_buttons = QtWidgets.QHBoxLayout()
-        self.open_output_button = QtWidgets.QPushButton("Open Selected")
-        self.open_output_folder_button = QtWidgets.QPushButton("Open Folder")
-        output_buttons.addWidget(self.open_output_button)
-        output_buttons.addWidget(self.open_output_folder_button)
-        output_card.body_layout.addLayout(output_buttons)
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
+        buttons.rejected.connect(self.settings_dialog.reject)
+        close_button = buttons.button(QtWidgets.QDialogButtonBox.Close)
+        if close_button is not None:
+            close_button.setText("Done")
+        layout.addWidget(buttons)
 
-        process_bar = QtWidgets.QHBoxLayout()
-        self.process_button = QtWidgets.QPushButton("Process Files")
-        self.progress_bar = QtWidgets.QProgressBar()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        process_bar.addWidget(self.process_button)
-        process_bar.addWidget(self.progress_bar, 1)
-        outer.addLayout(process_bar)
-
-        self.log_output = QtWidgets.QPlainTextEdit()
-        self.log_output.setReadOnly(True)
-        self.log_output.setMaximumBlockCount(400)
-        self.log_output.setMinimumHeight(90)
-        self.log_output.setMaximumHeight(120)
-        self.log_output.setPlaceholderText("Processing details and errors will appear here.")
-        outer.addWidget(self.log_output, 0)
-
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 1)
-        splitter.setStretchFactor(2, 2)
-        splitter.setSizes([420, 420, 600])
-        right_splitter.setSizes([520, 280])
-
-        self.add_files_button.clicked.connect(self._add_files)
-        self.remove_file_button.clicked.connect(self._remove_selected_files)
-        self.clear_files_button.clicked.connect(self._clear_files)
-        self.output_dir_button.clicked.connect(self._pick_output_dir)
         self.tesseract_button.clicked.connect(self._pick_tesseract)
         self.add_rule_button.clicked.connect(self._add_rule)
         self.remove_rule_button.clicked.connect(self._remove_selected_rule)
         self.reset_rules_button.clicked.connect(self._reset_rules)
         self.rule_list.currentRowChanged.connect(self._select_rule)
-        self.process_button.clicked.connect(self._start_processing)
-        self.open_output_button.clicked.connect(self._open_selected_output)
-        self.open_output_folder_button.clicked.connect(self._open_output_folder)
+        self.tesseract_edit.textChanged.connect(lambda *_: self._refresh_settings_summary())
+        self.settings_dialog.finished.connect(lambda *_: self._save_state())
 
-        self.due_editor.changed.connect(self._sync_active_rule)
-        self.note_editor.changed.connect(self._sync_active_rule)
+    def _open_settings(self) -> None:
+        if self.rules and self.rule_list.currentRow() < 0:
+            self.rule_list.setCurrentRow(0)
+        self.settings_dialog.exec()
+
+    def _refresh_settings_summary(self) -> None:
+        active_count = sum(1 for rule in self.rules if getattr(rule, "enabled", True))
+        total_count = len(self.rules)
+        ocr_ready = "ready" if self.tesseract_edit.text().strip() else "needs attention"
+        self.settings_summary_label.setText(
+            f"{active_count} of {total_count} rules are on. OCR is {ocr_ready}. Open Settings to edit rules or technical options."
+        )
 
     def _apply_styles(self) -> None:
         self.setStyleSheet(
@@ -873,6 +1052,21 @@ class MainWindow(QtWidgets.QMainWindow):
             }
             QPushButton:disabled {
                 background: #a8b3bf;
+            }
+            QToolButton#HelpButton {
+                background: #eef2f6;
+                color: #1f5a92;
+                border: 1px solid #cfd8e3;
+                border-radius: 10px;
+                font-weight: 700;
+                min-width: 20px;
+                max-width: 20px;
+                min-height: 20px;
+                max-height: 20px;
+                padding: 0px;
+            }
+            QToolButton#HelpButton:hover {
+                background: #dbe8f5;
             }
             QListWidget, QLineEdit, QSpinBox, QComboBox, QPlainTextEdit, QFontComboBox {
                 background: #ffffff;
@@ -973,6 +1167,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.editor_stack.setCurrentWidget(self.empty_editor)
 
         self._update_rule_buttons()
+        self._refresh_settings_summary()
 
     def _add_files(self) -> None:
         files, _ = QtWidgets.QFileDialog.getOpenFileNames(
@@ -1020,6 +1215,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         if path:
             self.tesseract_edit.setText(path)
+            self._refresh_settings_summary()
             self._save_state()
 
     def _count_rules(self, definition: RuleDefinition) -> int:
@@ -1113,6 +1309,7 @@ class MainWindow(QtWidgets.QMainWindow):
             current_item.setText(rule_list_text(rule))
             current_item.setToolTip(rule_summary(rule))
         self.rule_summary_label.setText(rule_summary(rule))
+        self._refresh_settings_summary()
         self._save_state()
 
     def _append_log(self, message: str) -> None:
