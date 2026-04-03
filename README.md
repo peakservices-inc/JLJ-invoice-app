@@ -181,15 +181,17 @@ py .\jlj_invoice_desktop.py
 1. Add one or more PDF files.
 2. Choose the output folder.
 3. Click `Proceed`.
-4. Open the processed PDFs from the results pane.
+4. Watch processing messages in the `Processing Details` pane.
+5. Open the processed PDFs from the results pane.
 
 If needed, click `Settings` to:
 
 - change the Tesseract path
 - change OCR DPI and JPEG quality
 - edit rules
+- change font family, size, color, and bold styling
 - change due-date spacing and placement
-- change note appearance
+- change note spacing, alignment, and placement
 
 ### Current starter rules
 
@@ -207,6 +209,35 @@ The default due-date rule currently uses:
 - default line spacing of `1 space` between `Due Date` and the date below it
 
 Users can adjust these values from `Settings > Rules`.
+
+### Current text and layout controls
+
+The app now exposes a fuller set of text-related controls so office users can tune the output without editing code.
+
+Shared styling options available across rules:
+
+- font family
+- text size adjustment, including very small text sizes
+- bold on or off
+- text color
+- horizontal position
+- vertical position
+
+Due Date rule options:
+
+- days after invoice date
+- invoice-date detection mode
+- custom invoice-date label keywords
+- line spacing between the due-date label and the due-date value
+- mirrored right-side spacing based on the source invoice date position
+
+Bottom Note rule options:
+
+- full note text
+- left, center, or right alignment
+- line spacing between wrapped note lines
+- body-margin alignment
+- bottom margin adjustment
 
 ### App data
 
@@ -246,6 +277,7 @@ Build the desktop app and the installer:
 - removes old `build` and `dist` folders
 - runs PyInstaller in `--onedir` mode
 - copies `install_tesseract.ps1` into the packaged app
+- downloads and bundles the Tesseract installer into the setup build
 - optionally compiles the Inno Setup installer
 
 ### Build outputs
@@ -259,10 +291,11 @@ The installer is defined in `installer/JLJInvoiceStudio.iss` and currently provi
 
 - modern Inno Setup wizard
 - desktop shortcut option
-- optional Tesseract installation task
+- bundled Tesseract installer so end users do not have to fetch OCR dependencies themselves
+- optional Tesseract installation task during setup
 - launch-after-install option
 
-The installer copies the packaged app from `dist\JLJInvoiceStudio\` into the installation folder and can run `installer/install_tesseract.ps1` during setup.
+The installer copies the packaged app from `dist\JLJInvoiceStudio\` into the installation folder and can run `installer/install_tesseract.ps1` during setup. The bundled OCR installer targets the standard machine-wide Tesseract location under `C:\Program Files\Tesseract-OCR\`.
 
 ## Rule Configuration Notes
 
@@ -275,8 +308,11 @@ The OCR engine currently supports:
 Users can configure rule appearance from the app, including:
 
 - font family
-- text size adjustments
+- text size adjustments, including smaller-than-before text
+- bold styling
+- text color
 - line spacing between the due-date label and value
+- line spacing between note lines
 - alignment
 - x/y offsets
 - label text

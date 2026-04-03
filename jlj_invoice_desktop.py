@@ -25,6 +25,8 @@ STATE_PATH = APP_DIR / "settings.json"
 LOG_PATH = APP_DIR / "app.log"
 RuleObject = backend.RuleConfig
 SPACE_STEP_PX = 6
+FONT_ADJUST_MIN = -72
+FONT_ADJUST_MAX = 120
 
 
 def ensure_app_dir() -> None:
@@ -109,12 +111,20 @@ def safe_font_family_name(family: str, fallback: str = "Arial") -> str:
     return family
 
 
+def safe_text_color(value: str, fallback: str = "#000000") -> str:
+    return backend.sanitize_hex_color(value, fallback=fallback)
+
+
 def sanitize_rule(rule: RuleObject) -> RuleObject:
     if isinstance(rule, backend.DueDateRuleConfig):
         rule.font_family = safe_font_family_name(rule.font_family or "Arial")
+        rule.text_color = safe_text_color(getattr(rule, "text_color", "#000000"))
         return rule
     if isinstance(rule, backend.NoteRuleConfig):
         rule.font_family = safe_font_family_name(rule.font_family or "Arial")
+        rule.text_color = safe_text_color(getattr(rule, "text_color", "#000000"))
+        if getattr(rule, "alignment", "").lower() not in {"left", "center", "right"}:
+            rule.alignment = "center" if getattr(rule, "centered", True) else "left"
         return rule
     return rule
 
@@ -213,6 +223,56 @@ class CardFrame(QtWidgets.QFrame):
         self.body_layout = layout
 
 
+class ColorField(QtWidgets.QWidget):
+    changed = QtCore.Signal()
+
+    def __init__(self) -> None:
+        super().__init__()
+        layout = QtWidgets.QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        self.line_edit = QtWidgets.QLineEdit("#000000")
+        self.line_edit.setPlaceholderText("#000000")
+        self.preview = QtWidgets.QLabel()
+        self.preview.setFixedSize(28, 28)
+        self.preview.setObjectName("ColorPreview")
+        self.button = QtWidgets.QPushButton("Pick")
+        self.button.setFixedWidth(70)
+
+        layout.addWidget(self.line_edit, 1)
+        layout.addWidget(self.preview)
+        layout.addWidget(self.button)
+
+        set_compact_input_height(self.line_edit)
+        set_compact_input_height(self.button)
+
+        self.line_edit.textChanged.connect(self._handle_text_changed)
+        self.button.clicked.connect(self._pick_color)
+        self._apply_preview("#000000")
+
+    def text(self) -> str:
+        return safe_text_color(self.line_edit.text())
+
+    def setText(self, value: str) -> None:
+        self.line_edit.setText(safe_text_color(value))
+
+    def _handle_text_changed(self, text: str) -> None:
+        self._apply_preview(safe_text_color(text))
+        self.changed.emit()
+
+    def _apply_preview(self, color: str) -> None:
+        self.preview.setStyleSheet(
+            f"border: 1px solid #d1d9e2; border-radius: 7px; background: {safe_text_color(color)};"
+        )
+
+    def _pick_color(self) -> None:
+        color = QtWidgets.QColorDialog.getColor(QtGui.QColor(self.text()), self, "Choose Text Color")
+        if not color.isValid():
+            return
+        self.line_edit.setText(color.name().upper())
+
+
 class DueDateRuleEditor(QtWidgets.QWidget):
     changed = QtCore.Signal()
 
@@ -270,7 +330,9 @@ class DueDateRuleEditor(QtWidgets.QWidget):
 
         self.font_family = QtWidgets.QFontComboBox()
         self.font_size_adjust = QtWidgets.QSpinBox()
-        self.font_size_adjust.setRange(-12, 24)
+        self.font_size_adjust.setRange(FONT_ADJUST_MIN, FONT_ADJUST_MAX)
+        self.bold_text = QtWidgets.QCheckBox("Make the due date text bold")
+        self.text_color = ColorField()
         self.line_spacing_spaces = QtWidgets.QSpinBox()
         self.line_spacing_spaces.setRange(-10, 10)
         self.line_spacing_spaces.setSuffix(" spaces")
@@ -286,13 +348,15 @@ class DueDateRuleEditor(QtWidgets.QWidget):
         self.mirrored_margin = QtWidgets.QCheckBox("Use the same right-side spacing as the invoice date on the left")
 
         spacing_help = QtWidgets.QLabel(
-            "Recommended default uses the original script spacing. Line spacing changes the gap between 'Due Date' and the date below it. Positive numbers add more gap."
+            "Line spacing changes the gap between 'Due Date' and the date below it. Position controls move the whole due-date block. You can also use negative text sizes for much smaller text."
         )
         spacing_help.setWordWrap(True)
         spacing_help.setObjectName("CardSubtitle")
 
         advanced_form.addRow("Font family", self.font_family)
         advanced_form.addRow("Text size adjustment", self.font_size_adjust)
+        advanced_form.addRow("", self.bold_text)
+        advanced_form.addRow("Text color", self.text_color)
         advanced_form.addRow("Space between 'Due Date' and the date", self.line_spacing_spaces)
         advanced_form.addRow("Move right (+) or left (-)", self.horizontal_spaces)
         advanced_form.addRow("Move down (+) or up (-)", self.vertical_spaces)
@@ -307,6 +371,7 @@ class DueDateRuleEditor(QtWidgets.QWidget):
             self.label_keywords,
             self.font_family,
             self.font_size_adjust,
+            self.text_color,
             self.line_spacing_spaces,
             self.horizontal_spaces,
             self.vertical_spaces,
@@ -325,6 +390,8 @@ class DueDateRuleEditor(QtWidgets.QWidget):
             self.label_keywords,
             self.font_family,
             self.font_size_adjust,
+            self.bold_text,
+            self.text_color,
             self.line_spacing_spaces,
             self.horizontal_spaces,
             self.vertical_spaces,
@@ -340,6 +407,8 @@ class DueDateRuleEditor(QtWidgets.QWidget):
                 widget.valueChanged.connect(lambda *_: self.changed.emit())
             elif isinstance(widget, QtWidgets.QFontComboBox):
                 widget.currentFontChanged.connect(lambda *_: self.changed.emit())
+            elif isinstance(widget, ColorField):
+                widget.changed.connect(lambda *_: self.changed.emit())
 
         self._rule: Optional[backend.DueDateRuleConfig] = None
 
@@ -354,6 +423,7 @@ class DueDateRuleEditor(QtWidgets.QWidget):
             QtCore.QSignalBlocker(self.label_keywords),
             QtCore.QSignalBlocker(self.font_family),
             QtCore.QSignalBlocker(self.font_size_adjust),
+            QtCore.QSignalBlocker(self.bold_text),
             QtCore.QSignalBlocker(self.line_spacing_spaces),
             QtCore.QSignalBlocker(self.horizontal_spaces),
             QtCore.QSignalBlocker(self.vertical_spaces),
@@ -367,6 +437,8 @@ class DueDateRuleEditor(QtWidgets.QWidget):
         self.label_keywords.setText(", ".join(rule.label_keywords))
         self.font_family.setCurrentFont(QtGui.QFont(safe_font_family_name(rule.font_family or "Arial")))
         self.font_size_adjust.setValue(rule.font_size_adjust)
+        self.bold_text.setChecked(getattr(rule, "bold", False))
+        self.text_color.setText(getattr(rule, "text_color", "#000000"))
         self.line_spacing_spaces.setValue(pixels_to_spaces(rule.line_gap_adjust))
         self.horizontal_spaces.setValue(pixels_to_spaces(rule.x_offset))
         self.vertical_spaces.setValue(pixels_to_spaces(rule.y_offset))
@@ -388,6 +460,8 @@ class DueDateRuleEditor(QtWidgets.QWidget):
         ] or backend.default_due_date_keywords()
         self._rule.font_family = safe_font_family_name(self.font_family.currentFont().family())
         self._rule.font_size_adjust = self.font_size_adjust.value()
+        self._rule.bold = self.bold_text.isChecked()
+        self._rule.text_color = self.text_color.text()
         self._rule.line_gap_adjust = spaces_to_pixels(self.line_spacing_spaces.value())
         self._rule.x_offset = spaces_to_pixels(self.horizontal_spaces.value())
         self._rule.y_offset = spaces_to_pixels(self.vertical_spaces.value())
@@ -420,31 +494,58 @@ class NoteRuleEditor(QtWidgets.QWidget):
         self.name_edit = QtWidgets.QLineEdit()
         self.note_text = QtWidgets.QPlainTextEdit()
         self.note_text.setMinimumHeight(150)
-        self.centered = QtWidgets.QCheckBox("Center the note inside the text area")
 
         basic_form.addRow("", self.enabled)
         basic_form.addRow("Rule name", self.name_edit)
         basic_form.addRow("Message to place", self.note_text)
-        basic_form.addRow("", self.centered)
 
         advanced_scroll, advanced_page, advanced_form = create_scroll_form_page()
 
         self.font_family = QtWidgets.QFontComboBox()
         self.font_size_adjust = QtWidgets.QSpinBox()
-        self.font_size_adjust.setRange(-12, 24)
+        self.font_size_adjust.setRange(FONT_ADJUST_MIN, FONT_ADJUST_MAX)
+        self.bold_text = QtWidgets.QCheckBox("Make the note text bold")
+        self.text_color = ColorField()
+        self.line_spacing_spaces = QtWidgets.QSpinBox()
+        self.line_spacing_spaces.setRange(-10, 20)
+        self.line_spacing_spaces.setSuffix(" spaces")
+        self.line_spacing_spaces.setSpecialValueText("Default")
+        self.alignment = QtWidgets.QComboBox()
+        self.alignment.addItem("Left", "left")
+        self.alignment.addItem("Center", "center")
+        self.alignment.addItem("Right", "right")
         self.use_body_margins = QtWidgets.QCheckBox("Use the same left and right margins as the body text")
+        self.horizontal_spaces = QtWidgets.QSpinBox()
+        self.horizontal_spaces.setRange(-60, 60)
+        self.horizontal_spaces.setSuffix(" spaces")
+        self.horizontal_spaces.setSpecialValueText("Default")
+        self.vertical_spaces = QtWidgets.QSpinBox()
+        self.vertical_spaces.setRange(-60, 60)
+        self.vertical_spaces.setSuffix(" spaces")
+        self.vertical_spaces.setSpecialValueText("Default")
         self.bottom_margin_adjust = QtWidgets.QSpinBox()
         self.bottom_margin_adjust.setRange(-200, 200)
 
         advanced_form.addRow("Font family", self.font_family)
         advanced_form.addRow("Text size adjustment", self.font_size_adjust)
+        advanced_form.addRow("", self.bold_text)
+        advanced_form.addRow("Text color", self.text_color)
+        advanced_form.addRow("Space between note lines", self.line_spacing_spaces)
+        advanced_form.addRow("Text alignment", self.alignment)
         advanced_form.addRow("", self.use_body_margins)
+        advanced_form.addRow("Move right (+) or left (-)", self.horizontal_spaces)
+        advanced_form.addRow("Move down (+) or up (-)", self.vertical_spaces)
         advanced_form.addRow("Move higher or lower", self.bottom_margin_adjust)
 
         for widget in [
             self.name_edit,
             self.font_family,
             self.font_size_adjust,
+            self.text_color,
+            self.line_spacing_spaces,
+            self.alignment,
+            self.horizontal_spaces,
+            self.vertical_spaces,
             self.bottom_margin_adjust,
         ]:
             set_compact_input_height(widget)
@@ -457,8 +558,13 @@ class NoteRuleEditor(QtWidgets.QWidget):
         self.note_text.textChanged.connect(self.changed.emit)
         self.font_family.currentFontChanged.connect(lambda *_: self.changed.emit())
         self.font_size_adjust.valueChanged.connect(lambda *_: self.changed.emit())
-        self.centered.clicked.connect(lambda *_: self.changed.emit())
+        self.bold_text.clicked.connect(lambda *_: self.changed.emit())
+        self.text_color.changed.connect(lambda *_: self.changed.emit())
+        self.line_spacing_spaces.valueChanged.connect(lambda *_: self.changed.emit())
+        self.alignment.currentIndexChanged.connect(lambda *_: self.changed.emit())
         self.use_body_margins.clicked.connect(lambda *_: self.changed.emit())
+        self.horizontal_spaces.valueChanged.connect(lambda *_: self.changed.emit())
+        self.vertical_spaces.valueChanged.connect(lambda *_: self.changed.emit())
         self.bottom_margin_adjust.valueChanged.connect(lambda *_: self.changed.emit())
 
         self._rule: Optional[backend.NoteRuleConfig] = None
@@ -471,8 +577,13 @@ class NoteRuleEditor(QtWidgets.QWidget):
             QtCore.QSignalBlocker(self.note_text),
             QtCore.QSignalBlocker(self.font_family),
             QtCore.QSignalBlocker(self.font_size_adjust),
-            QtCore.QSignalBlocker(self.centered),
+            QtCore.QSignalBlocker(self.bold_text),
+            QtCore.QSignalBlocker(self.text_color),
+            QtCore.QSignalBlocker(self.line_spacing_spaces),
+            QtCore.QSignalBlocker(self.alignment),
             QtCore.QSignalBlocker(self.use_body_margins),
+            QtCore.QSignalBlocker(self.horizontal_spaces),
+            QtCore.QSignalBlocker(self.vertical_spaces),
             QtCore.QSignalBlocker(self.bottom_margin_adjust),
         ]
         self.enabled.setChecked(rule.enabled)
@@ -480,8 +591,14 @@ class NoteRuleEditor(QtWidgets.QWidget):
         self.note_text.setPlainText(rule.text)
         self.font_family.setCurrentFont(QtGui.QFont(safe_font_family_name(rule.font_family or "Arial")))
         self.font_size_adjust.setValue(rule.font_size_adjust)
-        self.centered.setChecked(rule.centered)
+        self.bold_text.setChecked(getattr(rule, "bold", False))
+        self.text_color.setText(getattr(rule, "text_color", "#000000"))
+        self.line_spacing_spaces.setValue(pixels_to_spaces(getattr(rule, "line_gap_adjust", 0)))
+        alignment = getattr(rule, "alignment", "center" if getattr(rule, "centered", True) else "left")
+        self.alignment.setCurrentIndex(max(0, self.alignment.findData(alignment)))
         self.use_body_margins.setChecked(rule.use_body_margins)
+        self.horizontal_spaces.setValue(pixels_to_spaces(getattr(rule, "x_offset", 0)))
+        self.vertical_spaces.setValue(pixels_to_spaces(getattr(rule, "y_offset", 0)))
         self.bottom_margin_adjust.setValue(rule.bottom_margin_adjust)
         del blockers
 
@@ -493,8 +610,14 @@ class NoteRuleEditor(QtWidgets.QWidget):
         self._rule.text = self.note_text.toPlainText().strip() or backend.NOTE_TEXT
         self._rule.font_family = safe_font_family_name(self.font_family.currentFont().family())
         self._rule.font_size_adjust = self.font_size_adjust.value()
-        self._rule.centered = self.centered.isChecked()
+        self._rule.bold = self.bold_text.isChecked()
+        self._rule.text_color = self.text_color.text()
+        self._rule.line_gap_adjust = spaces_to_pixels(self.line_spacing_spaces.value())
+        self._rule.alignment = self.alignment.currentData()
+        self._rule.centered = self._rule.alignment == "center"
         self._rule.use_body_margins = self.use_body_margins.isChecked()
+        self._rule.x_offset = spaces_to_pixels(self.horizontal_spaces.value())
+        self._rule.y_offset = spaces_to_pixels(self.vertical_spaces.value())
         self._rule.bottom_margin_adjust = self.bottom_margin_adjust.value()
 
 
@@ -580,7 +703,13 @@ def rule_summary(rule: RuleObject) -> str:
         )
 
     if isinstance(rule, backend.NoteRuleConfig):
-        position = "Centered at the bottom" if rule.centered else "Left aligned at the bottom"
+        alignment = getattr(rule, "alignment", "center" if getattr(rule, "centered", True) else "left")
+        position_labels = {
+            "left": "Left aligned at the bottom",
+            "center": "Centered at the bottom",
+            "right": "Right aligned at the bottom",
+        }
+        position = position_labels.get(alignment, "Centered at the bottom")
         return f"{position}. Text: {normalize_preview(rule.text)}"
 
     return "Rule settings available."
@@ -670,14 +799,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._refresh_output_list()
 
     def _build_ui(self) -> None:
-        scroll = QtWidgets.QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
-        self.setCentralWidget(scroll)
-
         root = QtWidgets.QWidget()
-        root.setMinimumSize(1020, 760)
-        scroll.setWidget(root)
+        self.setCentralWidget(root)
         outer = QtWidgets.QVBoxLayout(root)
         outer.setContentsMargins(18, 18, 18, 18)
         outer.setSpacing(14)
@@ -719,10 +842,11 @@ class MainWindow(QtWidgets.QMainWindow):
             "Step 1: Files",
             "Add one or more invoice PDFs to process.",
         )
-        upload_card.setMinimumHeight(360)
+        upload_card.setMinimumHeight(300)
         left_layout.addWidget(upload_card, 1)
 
         self.input_list = QtWidgets.QListWidget()
+        self.input_list.setVerticalScrollMode(QtWidgets.QAbstractItemView.ScrollPerPixel)
         upload_card.body_layout.addWidget(self.input_list)
 
         upload_buttons = QtWidgets.QHBoxLayout()
@@ -780,10 +904,11 @@ class MainWindow(QtWidgets.QMainWindow):
         splitter.addWidget(right_column)
 
         results_card = CardFrame("Results", "Processed files appear here after each run.")
-        results_card.setMinimumHeight(420)
+        results_card.setMinimumHeight(300)
         right_layout.addWidget(results_card, 1)
 
         self.output_list = QtWidgets.QListWidget()
+        self.output_list.setVerticalScrollMode(QtWidgets.QAbstractItemView.ScrollPerPixel)
         results_card.body_layout.addWidget(self.output_list)
 
         output_buttons = QtWidgets.QHBoxLayout()
@@ -793,13 +918,16 @@ class MainWindow(QtWidgets.QMainWindow):
         output_buttons.addWidget(self.open_output_folder_button)
         results_card.body_layout.addLayout(output_buttons)
 
+        log_card = CardFrame("Processing Details", "Processing details and errors will appear here.")
+        log_card.setMinimumHeight(160)
+        right_layout.addWidget(log_card, 0)
+
         self.log_output = QtWidgets.QPlainTextEdit()
         self.log_output.setReadOnly(True)
         self.log_output.setMaximumBlockCount(400)
-        self.log_output.setMinimumHeight(90)
-        self.log_output.setMaximumHeight(120)
+        self.log_output.setMinimumHeight(120)
         self.log_output.setPlaceholderText("Processing details and errors will appear here.")
-        outer.addWidget(self.log_output, 0)
+        log_card.body_layout.addWidget(self.log_output)
 
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 1)

@@ -130,6 +130,8 @@ OCR_CONFIGS = [
     "--oem 3 --psm 11",
 ]
 
+HEX_COLOR_RE = re.compile(r"^#?(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
 
 @dataclass(frozen=True)
 class Box:
@@ -200,6 +202,8 @@ class DueDateRuleConfig:
     label_keywords: List[str] = field(default_factory=default_due_date_keywords)
     font_family: str = "Arial"
     font_size_adjust: int = 2
+    bold: bool = False
+    text_color: str = "#000000"
     line_gap_adjust: int = 6
     x_offset: int = -30
     y_offset: int = 0
@@ -213,6 +217,12 @@ class NoteRuleConfig:
     text: str = NOTE_TEXT
     font_family: str = "Arial"
     font_size_adjust: int = 5
+    bold: bool = False
+    text_color: str = "#000000"
+    line_gap_adjust: int = 0
+    x_offset: int = 0
+    y_offset: int = 0
+    alignment: str = "center"
     centered: bool = True
     use_body_margins: bool = True
     bottom_margin_adjust: int = 0
@@ -371,7 +381,7 @@ def resolve_font_path(preferred_family: str, bold: bool = False) -> Optional[Pat
 
 
 def load_font(size: int, bold: bool = False, preferred_family: str = "") -> ImageFont.ImageFont:
-    size = max(12, int(size))
+    size = max(4, int(size))
     preferred_path = resolve_font_path(preferred_family, bold=bold)
     if preferred_path is not None:
         return ImageFont.truetype(str(preferred_path), size=size)
@@ -385,6 +395,18 @@ def load_font(size: int, bold: bool = False, preferred_family: str = "") -> Imag
         return ImageFont.truetype(fallback_name, size=size)
     except OSError:
         return ImageFont.load_default()
+
+
+def sanitize_hex_color(value: str, fallback: str = "#000000") -> str:
+    text = (value or "").strip()
+    if not text:
+        return fallback
+    if not HEX_COLOR_RE.fullmatch(text):
+        return fallback
+    normalized = text if text.startswith("#") else f"#{text}"
+    if len(normalized) == 4:
+        normalized = "#" + "".join(ch * 2 for ch in normalized[1:])
+    return normalized.upper()
 
 
 def wrap_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_width: int) -> List[str]:
@@ -728,19 +750,20 @@ def fit_due_date_fonts(
     value_text: str,
     max_width: int,
     base_size: int,
+    bold: bool = False,
     preferred_family: str = "",
 ) -> Tuple[ImageFont.ImageFont, ImageFont.ImageFont, Tuple[int, int, int, int], Tuple[int, int, int, int]]:
-    for size in range(base_size, 11, -2):
-        label_font = load_font(max(12, size - 4), preferred_family=preferred_family)
-        value_font = load_font(size, preferred_family=preferred_family)
+    for size in range(base_size, 3, -1):
+        label_font = load_font(max(4, size - 4), bold=bold, preferred_family=preferred_family)
+        value_font = load_font(size, bold=bold, preferred_family=preferred_family)
         label_bbox = draw.textbbox((0, 0), label_text, font=label_font)
         value_bbox = draw.textbbox((0, 0), value_text, font=value_font)
         block_width = max(label_bbox[2] - label_bbox[0], value_bbox[2] - value_bbox[0])
         if block_width <= max_width:
             return label_font, value_font, label_bbox, value_bbox
 
-    label_font = load_font(12, preferred_family=preferred_family)
-    value_font = load_font(12, preferred_family=preferred_family)
+    label_font = load_font(4, bold=bold, preferred_family=preferred_family)
+    value_font = load_font(4, bold=bold, preferred_family=preferred_family)
     return (
         label_font,
         value_font,
@@ -791,9 +814,10 @@ def draw_due_date_block(
     margin = max(24, image_width // 60)
     gap = max(40, image_width // 40)
     _ = document_font_size
-    base_font_size = (
+    base_font_size = max(
+        4,
         max(24, min(56, int(max(anchor_box.height, match.date_box.height) * 0.9)))
-        + due_date_rule.font_size_adjust
+        + due_date_rule.font_size_adjust,
     )
     mirrored_right_inset = max(margin, anchor_box.x0) if due_date_rule.mirrored_margin else margin
     available_width = max(120, image_width - margin - mirrored_right_inset)
@@ -804,6 +828,7 @@ def draw_due_date_block(
         value_text=value_text,
         max_width=available_width,
         base_size=base_font_size,
+        bold=due_date_rule.bold,
         preferred_family=due_date_rule.font_family,
     )
 
@@ -812,11 +837,12 @@ def draw_due_date_block(
     value_width = value_bbox[2] - value_bbox[0]
     value_height = value_bbox[3] - value_bbox[1]
     block_width = max(label_width, value_width)
-    resolved_font_size = max(12, getattr(value_font, "size", base_font_size))
-    line_gap = max(4, (resolved_font_size // 4) + due_date_rule.line_gap_adjust)
+    resolved_font_size = max(4, getattr(value_font, "size", base_font_size))
+    line_gap = max(0, (resolved_font_size // 4) + due_date_rule.line_gap_adjust)
     padding_x = max(10, resolved_font_size // 2)
     padding_y = max(4, resolved_font_size // 4)
     block_height = label_height + line_gap + value_height
+    fill_color = sanitize_hex_color(due_date_rule.text_color)
 
     x = image_width - mirrored_right_inset - block_width - padding_x
     minimum_x = anchor_box.x1 + gap + padding_x
@@ -830,8 +856,8 @@ def draw_due_date_block(
     x = max(margin, min(image_width - block_width - padding_x, x))
     y = max(margin, min(image_height - block_height - padding_y, y))
 
-    draw.text((x, y), label_text, fill="black", font=label_font)
-    draw.text((x, y + label_height + line_gap), value_text, fill="black", font=value_font)
+    draw.text((x, y), label_text, fill=fill_color, font=label_font)
+    draw.text((x, y + label_height + line_gap), value_text, fill=fill_color, font=value_font)
 
 
 def estimate_note_margins(
@@ -875,22 +901,29 @@ def draw_note_block(
         left_margin = right_margin = max(32, image_width // 24)
     max_width = image_width - left_margin - right_margin
     _ = document_font_size
-    font_size = max(18, min(36, image_width // 55)) + note_rule.font_size_adjust
-    font = load_font(font_size, preferred_family=note_rule.font_family)
+    font_size = max(4, max(18, min(36, image_width // 55)) + note_rule.font_size_adjust)
+    font = load_font(font_size, bold=note_rule.bold, preferred_family=note_rule.font_family)
     lines = wrap_text(draw, note_rule.text, font, max_width)
     text_height = line_height(draw, font)
-    line_gap = max(4, font_size // 4)
+    line_gap = max(0, (text_height // 4) + note_rule.line_gap_adjust)
     text_block_height = (len(lines) * text_height) + (max(0, len(lines) - 1) * line_gap)
-    top = max(10, image_height - margin_bottom - text_block_height)
+    top = max(10, image_height - margin_bottom - text_block_height) + note_rule.y_offset
+    top = max(10, min(image_height - text_block_height - 10, top))
+    fill_color = sanitize_hex_color(note_rule.text_color)
+    alignment = (note_rule.alignment or ("center" if note_rule.centered else "left")).lower()
 
     y = top
     for line in lines:
         line_width = draw.textlength(line, font=font)
-        if note_rule.centered:
+        if alignment == "right":
+            x = int(round(image_width - right_margin - line_width))
+        elif alignment == "center":
             x = int(round(left_margin + ((max_width - line_width) / 2.0)))
         else:
             x = left_margin
-        draw.text((x, y), line, fill="black", font=font)
+        x += note_rule.x_offset
+        x = max(8, min(image_width - int(line_width) - 8, x))
+        draw.text((x, y), line, fill=fill_color, font=font)
         y += text_height + line_gap
 
 
