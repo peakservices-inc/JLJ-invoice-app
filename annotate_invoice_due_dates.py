@@ -354,24 +354,42 @@ def resolve_font_path(preferred_family: str, bold: bool = False) -> Optional[Pat
     if any(keyword in preferred for keyword in UNSAFE_FONT_KEYWORDS):
         return None
 
+    def is_bold_variant(stem: str) -> bool:
+        return (
+            "bold" in stem
+            or "black" in stem
+            or "heavy" in stem
+            or "semibold" in stem
+            or "demibold" in stem
+            or stem.endswith("bd")
+            or stem == preferred + "b"
+            or stem == preferred + "bd"
+        )
+
     candidates = []
-    for path in fonts_dir.glob("*.ttf"):
-        stem = re.sub(r"[^a-z0-9]+", "", path.stem.lower())
-        if preferred and (preferred in stem or stem in preferred):
-            if any(keyword in stem for keyword in UNSAFE_FONT_KEYWORDS):
-                continue
-            score = 0
-            if stem == preferred:
-                score += 100
-            elif stem.startswith(preferred):
-                score += 50
-            elif preferred.startswith(stem):
-                score += 20
-            if bold and ("bold" in path.stem.lower() or "bd" in path.stem.lower()):
-                score += 10
-            if not bold and "bold" not in path.stem.lower():
-                score += 5
-            candidates.append((score, -len(path.name), path))
+    for pattern in ("*.ttf", "*.ttc", "*.otf"):
+        for path in fonts_dir.glob(pattern):
+            stem = re.sub(r"[^a-z0-9]+", "", path.stem.lower())
+            if preferred and (preferred in stem or stem in preferred):
+                if any(keyword in stem for keyword in UNSAFE_FONT_KEYWORDS):
+                    continue
+                score = 0
+                if stem == preferred:
+                    score += 100
+                elif stem == preferred + "b" or stem == preferred + "bd":
+                    score += 140
+                elif stem.startswith(preferred):
+                    score += 50
+                elif preferred.startswith(stem):
+                    score += 20
+
+                bold_variant = is_bold_variant(stem)
+                if bold:
+                    score += 220 if bold_variant else -120
+                else:
+                    score += 20 if not bold_variant else -40
+
+                candidates.append((score, -len(path.name), path))
 
     if not candidates:
         return None
