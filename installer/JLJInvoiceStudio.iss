@@ -13,7 +13,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 WizardStyle=modern
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
 Compression=lzma2/max
 SolidCompression=yes
 OutputDir=..\installer_output
@@ -32,11 +32,12 @@ Name: "installtesseract"; Description: "Install Tesseract OCR dependency (recomm
 [Files]
 Source: "..\dist\JLJInvoiceStudio\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\installer\install_tesseract.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\installer\downloads\tesseract-ocr-installer.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\install_tesseract.ps1"""; Flags: runhidden waituntilterminated; Tasks: installtesseract
+Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\install_tesseract.ps1"""; StatusMsg: "Installing OCR engine (Tesseract). This may take a minute..."; Flags: runhidden waituntilterminated; Tasks: installtesseract
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent

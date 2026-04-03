@@ -9,6 +9,7 @@ venv/
 build/
 dist/
 installer_output/
+installer/downloads/
 
 INPUT/*
 !INPUT/.gitkeep

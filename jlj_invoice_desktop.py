@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 import traceback
 from dataclasses import asdict, dataclass
@@ -38,13 +39,31 @@ def append_app_log(message: str) -> None:
 
 
 def default_tesseract_path() -> str:
+    return resolve_tesseract_path()
+
+
+def resolve_tesseract_path(preferred: str = "") -> str:
+    if preferred:
+        resolved = shutil.which(preferred)
+        candidate = Path(resolved) if resolved else Path(preferred)
+        if candidate.exists():
+            return str(candidate)
+
     candidates = [
         Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe"),
-        Path(r"C:\Users\%s\AppData\Local\Programs\Tesseract-OCR\tesseract.exe" % os.environ.get("USERNAME", "")),
+        Path(os.environ.get("LOCALAPPDATA", str(Path.home()))).joinpath(
+            "Programs", "Tesseract-OCR", "tesseract.exe"
+        ),
+        Path(r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"),
     ]
     for candidate in candidates:
         if candidate.exists():
             return str(candidate)
+
+    resolved = shutil.which("tesseract")
+    if resolved:
+        return resolved
+
     return ""
 
 
@@ -1001,7 +1020,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _refresh_settings_summary(self) -> None:
         active_count = sum(1 for rule in self.rules if getattr(rule, "enabled", True))
         total_count = len(self.rules)
-        ocr_ready = "ready" if self.tesseract_edit.text().strip() else "needs attention"
+        ocr_ready = "ready" if resolve_tesseract_path(self.tesseract_edit.text().strip()) else "needs attention"
         self.settings_summary_label.setText(
             f"{active_count} of {total_count} rules are on. OCR is {ocr_ready}. Open Settings to edit rules or technical options."
         )
@@ -1068,13 +1087,47 @@ class MainWindow(QtWidgets.QMainWindow):
             QToolButton#HelpButton:hover {
                 background: #dbe8f5;
             }
-            QListWidget, QLineEdit, QSpinBox, QComboBox, QPlainTextEdit, QFontComboBox {
+            QListWidget, QLineEdit, QComboBox, QPlainTextEdit, QFontComboBox {
                 background: #ffffff;
                 border: 1px solid #d1d9e2;
                 border-radius: 9px;
                 padding: 6px 8px;
                 selection-background-color: #dbe8f5;
                 selection-color: #17334d;
+            }
+            QAbstractSpinBox {
+                background: #ffffff;
+                border: 1px solid #d1d9e2;
+                border-radius: 9px;
+                padding: 4px 30px 4px 8px;
+                min-height: 24px;
+                selection-background-color: #dbe8f5;
+                selection-color: #17334d;
+            }
+            QAbstractSpinBox::up-button,
+            QAbstractSpinBox::down-button {
+                subcontrol-origin: border;
+                width: 24px;
+                background: #f7f9fc;
+                border-left: 1px solid #d1d9e2;
+            }
+            QAbstractSpinBox::up-button {
+                subcontrol-position: top right;
+                border-top-right-radius: 9px;
+            }
+            QAbstractSpinBox::down-button {
+                subcontrol-position: bottom right;
+                border-bottom-right-radius: 9px;
+                border-top: 1px solid #d1d9e2;
+            }
+            QAbstractSpinBox::up-button:hover,
+            QAbstractSpinBox::down-button:hover {
+                background: #e8f0f8;
+            }
+            QAbstractSpinBox::up-arrow,
+            QAbstractSpinBox::down-arrow {
+                width: 10px;
+                height: 10px;
             }
             QProgressBar {
                 border: 1px solid #d1d9e2;
@@ -1116,7 +1169,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.input_files = payload.get("input_files", [])
         self.output_dir_edit.setText(payload.get("output_dir", self.output_dir_edit.text()))
-        self.tesseract_edit.setText(payload.get("tesseract_path", self.tesseract_edit.text()))
+        saved_tesseract_path = payload.get("tesseract_path", "")
+        self.tesseract_edit.setText(resolve_tesseract_path(saved_tesseract_path or self.tesseract_edit.text()))
         self.dpi_spin.setValue(payload.get("dpi", self.dpi_spin.value()))
         self.quality_spin.setValue(payload.get("jpeg_quality", self.quality_spin.value()))
 
@@ -1335,7 +1389,10 @@ class MainWindow(QtWidgets.QMainWindow):
             return "Choose an output folder before processing."
 
         try:
-            backend.configure_tesseract(self.tesseract_edit.text().strip() or None)
+            resolved_tesseract_path = resolve_tesseract_path(self.tesseract_edit.text().strip())
+            if resolved_tesseract_path:
+                self.tesseract_edit.setText(resolved_tesseract_path)
+            backend.configure_tesseract(resolved_tesseract_path or None)
         except Exception as exc:
             return str(exc)
 
@@ -1360,7 +1417,7 @@ class MainWindow(QtWidgets.QMainWindow):
             output_dir=self.output_dir_edit.text().strip(),
             dpi=self.dpi_spin.value(),
             jpeg_quality=self.quality_spin.value(),
-            tesseract_path=self.tesseract_edit.text().strip(),
+            tesseract_path=resolve_tesseract_path(self.tesseract_edit.text().strip()),
             rules=clone_rules(self.rules),
         )
         self.worker.moveToThread(self.processing_thread)
