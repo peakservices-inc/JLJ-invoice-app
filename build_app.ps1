@@ -8,6 +8,12 @@ $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Python = Join-Path $env:LOCALAPPDATA "Programs\Python\Python314\python.exe"
 $PyInstaller = Join-Path $env:LOCALAPPDATA "Programs\Python\Python314\Scripts\pyinstaller.exe"
 $Iscc = Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"
+$AppName = "JLJ-invoice Rider"
+$DistAppDir = Join-Path (Join-Path $Root "dist") $AppName
+$InstallerScript = Join-Path $Root "installer\JLJ-invoice Rider.iss"
+$InstallerOutputDir = Join-Path $Root "installer_output"
+$InstallerOutput = Join-Path $InstallerOutputDir "$AppName Setup.exe"
+$LegacyInstallerOutput = Join-Path $InstallerOutputDir "JLJInvoiceStudioSetup.exe"
 $Icon = Join-Path $Root "assets\jlj_invoice.ico"
 $TesseractBundleDir = Join-Path $Root "installer\downloads"
 $TesseractBundle = Join-Path $TesseractBundleDir "tesseract-ocr-installer.exe"
@@ -57,7 +63,7 @@ try {
         "--clean",
         "--windowed",
         "--onedir",
-        "--name", "JLJInvoiceStudio",
+        "--name", $AppName,
         "--collect-all", "fitz",
         "--collect-all", "pytesseract",
         "--collect-all", "PIL"
@@ -71,14 +77,15 @@ try {
 
     & $PyInstaller @PyArgs
 
-    Copy-Item .\installer\install_tesseract.ps1 .\dist\JLJInvoiceStudio\install_tesseract.ps1 -Force
+    Copy-Item .\installer\install_tesseract.ps1 (Join-Path $DistAppDir "install_tesseract.ps1") -Force
 
     if ($BuildInstaller) {
         if (-not (Test-Path $Iscc)) {
             throw "Inno Setup compiler not found at $Iscc"
         }
         Ensure-TesseractBundle
-        & $Iscc ".\installer\JLJInvoiceStudio.iss"
+        Remove-Item -LiteralPath $LegacyInstallerOutput, $InstallerOutput -Force -ErrorAction SilentlyContinue
+        & $Iscc $InstallerScript
     }
 }
 finally {

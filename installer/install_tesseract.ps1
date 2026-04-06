@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$logPath = Join-Path $env:TEMP "JLJInvoiceStudio_TesseractInstall.log"
+$logPath = Join-Path $env:TEMP "JLJ-invoice Rider_TesseractInstall.log"
 $preferredInstallDir = Join-Path ${env:ProgramFiles} "Tesseract-OCR"
 
 function Write-Log {

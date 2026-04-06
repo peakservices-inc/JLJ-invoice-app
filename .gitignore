@@ -19,4 +19,4 @@ OUTPUT/*
 *.log
 *.tmp
 
-JLJInvoiceStudio.spec
+JLJ-invoice Rider.spec

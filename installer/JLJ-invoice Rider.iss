@@ -1,7 +1,7 @@
-#define MyAppName "JLJ Invoice Rule Studio"
+#define MyAppName "JLJ-invoice Rider"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "JLJ IV Enterprises Inc."
-#define MyAppExeName "JLJInvoiceStudio.exe"
+#define MyAppExeName "JLJ-invoice Rider.exe"
 
 [Setup]
 AppId={{A740D509-DAF9-4D9D-B95D-8D69FDD7A8F9}
@@ -17,12 +17,12 @@ PrivilegesRequired=admin
 Compression=lzma2/max
 SolidCompression=yes
 OutputDir=..\installer_output
-OutputBaseFilename=JLJInvoiceStudioSetup
+OutputBaseFilename=JLJ-invoice Rider Setup
 ArchitecturesInstallIn64BitMode=x64compatible
 SetupIconFile=..\assets\jlj_invoice.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 VersionInfoCompany={#MyAppPublisher}
-VersionInfoDescription=Invoice automation desktop studio
+VersionInfoDescription=JLJ-invoice Rider desktop application
 VersionInfoProductName={#MyAppName}
 
 [Tasks]
@@ -30,7 +30,7 @@ Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Ad
 Name: "installtesseract"; Description: "Install Tesseract OCR dependency (recommended)"; Flags: checkedonce
 
 [Files]
-Source: "..\dist\JLJInvoiceStudio\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\JLJ-invoice Rider\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\installer\install_tesseract.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\installer\downloads\tesseract-ocr-installer.exe"; DestDir: "{app}"; Flags: ignoreversion
 

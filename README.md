@@ -1,8 +1,8 @@
-# JLJ Invoice Rule Studio
+# JLJ-invoice Rider
 
 Property of JLJ IV Enterprises Inc.
 
-JLJ Invoice Rule Studio is a Windows-based OCR workflow for scanned invoice PDFs. It can:
+JLJ-invoice Rider is a Windows-based OCR workflow for scanned invoice PDFs. It can:
 
 - detect an invoice date using OCR
 - add a calculated due date based on the invoice date
@@ -83,7 +83,7 @@ When a user clicks `Proceed`, the app does this:
 - `build_app.ps1`: build script for the packaged app and installer
 - `requirements-script.txt`: minimal dependencies for script-only usage
 - `requirements-desktop.txt`: dependencies for the desktop app and packaging
-- `installer/JLJInvoiceStudio.iss`: Inno Setup installer definition
+- `installer/JLJ-invoice Rider.iss`: Inno Setup installer definition
 - `installer/install_tesseract.ps1`: optional Tesseract bootstrap run by the installer
 
 ## Requirements
@@ -244,9 +244,11 @@ Bottom Note rule options:
 The desktop app stores user settings and logs here:
 
 ```text
-Settings: C:\Users\<YourUser>\AppData\Roaming\JLJ IV Enterprises Inc\Invoice Rule Studio\settings.json
-Log file: C:\Users\<YourUser>\AppData\Roaming\JLJ IV Enterprises Inc\Invoice Rule Studio\app.log
+Settings: C:\Users\<YourUser>\AppData\Roaming\JLJ IV Enterprises Inc\JLJ-invoice Rider\settings.json
+Log file: C:\Users\<YourUser>\AppData\Roaming\JLJ IV Enterprises Inc\JLJ-invoice Rider\app.log
 ```
+
+On first launch after the rename, the app copies any existing settings and log file from the older `Invoice Rule Studio` AppData folder into the new `JLJ-invoice Rider` folder.
 
 ## Build The Packaged Windows App
 
@@ -282,12 +284,12 @@ Build the desktop app and the installer:
 
 ### Build outputs
 
-- packaged app folder: `dist\JLJInvoiceStudio\`
-- installer exe: `installer_output\JLJInvoiceStudioSetup.exe`
+- packaged app folder: `dist\JLJ-invoice Rider\`
+- installer exe: `installer_output\JLJ-invoice Rider Setup.exe`
 
 ## Installer Notes
 
-The installer is defined in `installer/JLJInvoiceStudio.iss` and currently provides:
+The installer is defined in `installer/JLJ-invoice Rider.iss` and currently provides:
 
 - modern Inno Setup wizard
 - desktop shortcut option
@@ -295,7 +297,7 @@ The installer is defined in `installer/JLJInvoiceStudio.iss` and currently provi
 - optional Tesseract installation task during setup
 - launch-after-install option
 
-The installer copies the packaged app from `dist\JLJInvoiceStudio\` into the installation folder and can run `installer/install_tesseract.ps1` during setup. The bundled OCR installer targets the standard machine-wide Tesseract location under `C:\Program Files\Tesseract-OCR\`.
+The installer copies the packaged app from `dist\JLJ-invoice Rider\` into the installation folder and can run `installer/install_tesseract.ps1` during setup. The bundled OCR installer targets the standard machine-wide Tesseract location under `C:\Program Files\Tesseract-OCR\`.
 
 ## Rule Configuration Notes
 
@@ -333,7 +335,7 @@ Check:
 - Tesseract is installed
 - the Tesseract path is correct
 - the input PDF exists
-- the app log at `AppData\Roaming\JLJ IV Enterprises Inc\Invoice Rule Studio\app.log`
+- the app log at `AppData\Roaming\JLJ IV Enterprises Inc\JLJ-invoice Rider\app.log`
 
 ### Installer build fails
 

@@ -16,9 +16,12 @@ from PySide6 import QtCore, QtGui, QtWidgets
 import annotate_invoice_due_dates as backend
 
 
-APP_TITLE = "JLJ IV Enterprises Inc. Invoice Rule Studio"
+APP_TITLE = "JLJ-invoice Rider"
 APP_SUBTITLE = "Property of JLJ IV Enterprises Inc."
 APP_DIR = Path(os.environ.get("APPDATA", str(Path.home()))).joinpath(
+    "JLJ IV Enterprises Inc", "JLJ-invoice Rider"
+)
+LEGACY_APP_DIR = Path(os.environ.get("APPDATA", str(Path.home()))).joinpath(
     "JLJ IV Enterprises Inc", "Invoice Rule Studio"
 )
 STATE_PATH = APP_DIR / "settings.json"
@@ -31,6 +34,12 @@ FONT_ADJUST_MAX = 120
 
 def ensure_app_dir() -> None:
     APP_DIR.mkdir(parents=True, exist_ok=True)
+    # Carry forward settings and logs from the previous app folder name.
+    for filename in ("settings.json", "app.log"):
+        legacy_path = LEGACY_APP_DIR / filename
+        target_path = APP_DIR / filename
+        if legacy_path.exists() and not target_path.exists():
+            shutil.copy2(legacy_path, target_path)
 
 
 def append_app_log(message: str) -> None:
@@ -1607,6 +1616,7 @@ def main() -> int:
     ensure_app_dir()
     append_app_log("Application launched.")
     app = QtWidgets.QApplication(sys.argv)
+    app.setApplicationName(APP_TITLE)
     app.setApplicationDisplayName(APP_TITLE)
     app.setOrganizationName("JLJ IV Enterprises Inc.")
     window = MainWindow()
