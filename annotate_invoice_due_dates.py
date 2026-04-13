@@ -220,6 +220,7 @@ class NoteRuleConfig:
     bold: bool = False
     text_color: str = "#000000"
     line_gap_adjust: int = 0
+    paragraph_gap_adjust: int = 6
     x_offset: int = 0
     y_offset: int = 0
     alignment: str = "center"
@@ -445,6 +446,45 @@ def wrap_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, m
 
     lines.append(current)
     return lines
+
+
+def wrap_note_paragraphs(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.ImageFont,
+    max_width: int,
+) -> List[List[str]]:
+    paragraphs = []
+    for raw_line in text.splitlines():
+        paragraph_text = " ".join(raw_line.split())
+        if paragraph_text:
+            paragraphs.append(wrap_text(draw, paragraph_text, font, max_width))
+        elif paragraphs:
+            paragraphs.append([])
+
+    while paragraphs and not paragraphs[-1]:
+        paragraphs.pop()
+
+    if not paragraphs and text.strip():
+        return [wrap_text(draw, text, font, max_width)]
+    return paragraphs
+
+
+def note_block_height(
+    paragraphs: Sequence[Sequence[str]],
+    text_height: int,
+    line_gap: int,
+    paragraph_gap: int,
+) -> int:
+    total_height = 0
+    for paragraph_index, paragraph in enumerate(paragraphs):
+        if paragraph_index > 0:
+            total_height += paragraph_gap
+        if paragraph:
+            total_height += (len(paragraph) * text_height) + (max(0, len(paragraph) - 1) * line_gap)
+        else:
+            total_height += paragraph_gap
+    return total_height
 
 
 def line_height(draw: ImageDraw.ImageDraw, font: ImageFont.ImageFont) -> int:
@@ -921,28 +961,37 @@ def draw_note_block(
     _ = document_font_size
     font_size = max(4, max(18, min(36, image_width // 55)) + note_rule.font_size_adjust)
     font = load_font(font_size, bold=note_rule.bold, preferred_family=note_rule.font_family)
-    lines = wrap_text(draw, note_rule.text, font, max_width)
+    paragraphs = wrap_note_paragraphs(draw, note_rule.text, font, max_width)
     text_height = line_height(draw, font)
     line_gap = max(0, (text_height // 4) + note_rule.line_gap_adjust)
-    text_block_height = (len(lines) * text_height) + (max(0, len(lines) - 1) * line_gap)
+    paragraph_gap = max(0, line_gap + (text_height // 2) + note_rule.paragraph_gap_adjust)
+    text_block_height = note_block_height(paragraphs, text_height, line_gap, paragraph_gap)
     top = max(10, image_height - margin_bottom - text_block_height) + note_rule.y_offset
     top = max(10, min(image_height - text_block_height - 10, top))
     fill_color = sanitize_hex_color(note_rule.text_color)
     alignment = (note_rule.alignment or ("center" if note_rule.centered else "left")).lower()
 
     y = top
-    for line in lines:
-        line_width = draw.textlength(line, font=font)
-        if alignment == "right":
-            x = int(round(image_width - right_margin - line_width))
-        elif alignment == "center":
-            x = int(round(left_margin + ((max_width - line_width) / 2.0)))
-        else:
-            x = left_margin
-        x += note_rule.x_offset
-        x = max(8, min(image_width - int(line_width) - 8, x))
-        draw.text((x, y), line, fill=fill_color, font=font)
-        y += text_height + line_gap
+    for paragraph_index, paragraph in enumerate(paragraphs):
+        if paragraph_index > 0:
+            y += paragraph_gap
+        if not paragraph:
+            y += paragraph_gap
+            continue
+        for line_index, line in enumerate(paragraph):
+            line_width = draw.textlength(line, font=font)
+            if alignment == "right":
+                x = int(round(image_width - right_margin - line_width))
+            elif alignment == "center":
+                x = int(round(left_margin + ((max_width - line_width) / 2.0)))
+            else:
+                x = left_margin
+            x += note_rule.x_offset
+            x = max(8, min(image_width - int(line_width) - 8, x))
+            draw.text((x, y), line, fill=fill_color, font=font)
+            y += text_height
+            if line_index < len(paragraph) - 1:
+                y += line_gap
 
 
 def annotate_page(

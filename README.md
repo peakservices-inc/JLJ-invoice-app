@@ -237,6 +237,8 @@ Bottom Note rule options:
 - full note text
 - left, center, or right alignment
 - line spacing between wrapped note lines
+- paragraph breaks when pressing Enter in the note text
+- paragraph spacing between typed note paragraphs
 - body-margin alignment
 
 ### App data

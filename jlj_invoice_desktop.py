@@ -228,11 +228,16 @@ SETTING_HELP_TEXTS: Dict[str, tuple[str, str]] = {
     ),
     "note_text": (
         "Message To Place",
-        "This is the note text printed near the bottom of each processed PDF page.",
+        "This is the note text printed near the bottom of each processed PDF page.\n\n"
+        "Press Enter to start a new paragraph. Wrapped lines inside the same paragraph use normal note line spacing.",
     ),
     "note_line_spacing": (
         "Note Line Spacing",
         "This changes the spacing between wrapped lines in the bottom note.",
+    ),
+    "note_paragraph_spacing": (
+        "Paragraph Spacing",
+        "This controls the extra gap between paragraphs in the bottom note. Each line you start with Enter in Message to place becomes a separate paragraph.",
     ),
     "note_alignment": (
         "Text Alignment",
@@ -654,10 +659,16 @@ class NoteRuleEditor(QtWidgets.QWidget):
         self.name_edit = QtWidgets.QLineEdit()
         self.note_text = QtWidgets.QPlainTextEdit()
         self.note_text.setMinimumHeight(150)
+        paragraph_tip = QtWidgets.QLabel(
+            "Press Enter to start a new paragraph. Use Paragraph spacing in Advanced to adjust the extra gap."
+        )
+        paragraph_tip.setWordWrap(True)
+        paragraph_tip.setObjectName("CardSubtitle")
 
         basic_form.addRow("", build_setting_control(self.enabled, "rule_enabled", self))
         basic_form.addRow(build_setting_label("Rule name", "rule_name", self), self.name_edit)
         basic_form.addRow(build_setting_label("Message to place", "note_text", self), self.note_text)
+        basic_form.addRow("", paragraph_tip)
 
         advanced_scroll, advanced_page, advanced_form = create_scroll_form_page()
 
@@ -670,6 +681,9 @@ class NoteRuleEditor(QtWidgets.QWidget):
         self.line_spacing_spaces.setRange(-10, 20)
         self.line_spacing_spaces.setSuffix(" spaces")
         self.line_spacing_spaces.setSpecialValueText("Default")
+        self.paragraph_spacing_spaces = QtWidgets.QSpinBox()
+        self.paragraph_spacing_spaces.setRange(-10, 30)
+        self.paragraph_spacing_spaces.setSuffix(" spaces")
         self.alignment = QtWidgets.QComboBox()
         self.alignment.addItem("Left", "left")
         self.alignment.addItem("Center", "center")
@@ -688,6 +702,7 @@ class NoteRuleEditor(QtWidgets.QWidget):
         advanced_form.addRow("", build_setting_control(self.bold_text, "bold_text", self))
         advanced_form.addRow(build_setting_label("Text color", "text_color", self), self.text_color)
         advanced_form.addRow(build_setting_label("Space between note lines", "note_line_spacing", self), self.line_spacing_spaces)
+        advanced_form.addRow(build_setting_label("Space between paragraphs", "note_paragraph_spacing", self), self.paragraph_spacing_spaces)
         advanced_form.addRow(build_setting_label("Text alignment", "note_alignment", self), self.alignment)
         advanced_form.addRow("", build_setting_control(self.use_body_margins, "note_body_margins", self))
         advanced_form.addRow(build_setting_label("Move right (+) or left (-)", "move_horizontal", self), self.horizontal_spaces)
@@ -699,6 +714,7 @@ class NoteRuleEditor(QtWidgets.QWidget):
             self.font_size_adjust,
             self.text_color,
             self.line_spacing_spaces,
+            self.paragraph_spacing_spaces,
             self.alignment,
             self.horizontal_spaces,
             self.vertical_spaces,
@@ -716,6 +732,7 @@ class NoteRuleEditor(QtWidgets.QWidget):
         self.bold_text.clicked.connect(lambda *_: self.changed.emit())
         self.text_color.changed.connect(lambda *_: self.changed.emit())
         self.line_spacing_spaces.valueChanged.connect(lambda *_: self.changed.emit())
+        self.paragraph_spacing_spaces.valueChanged.connect(lambda *_: self.changed.emit())
         self.alignment.currentIndexChanged.connect(lambda *_: self.changed.emit())
         self.use_body_margins.clicked.connect(lambda *_: self.changed.emit())
         self.horizontal_spaces.valueChanged.connect(lambda *_: self.changed.emit())
@@ -734,6 +751,7 @@ class NoteRuleEditor(QtWidgets.QWidget):
             QtCore.QSignalBlocker(self.bold_text),
             QtCore.QSignalBlocker(self.text_color),
             QtCore.QSignalBlocker(self.line_spacing_spaces),
+            QtCore.QSignalBlocker(self.paragraph_spacing_spaces),
             QtCore.QSignalBlocker(self.alignment),
             QtCore.QSignalBlocker(self.use_body_margins),
             QtCore.QSignalBlocker(self.horizontal_spaces),
@@ -747,6 +765,7 @@ class NoteRuleEditor(QtWidgets.QWidget):
         self.bold_text.setChecked(getattr(rule, "bold", False))
         self.text_color.setText(getattr(rule, "text_color", "#000000"))
         self.line_spacing_spaces.setValue(pixels_to_spaces(getattr(rule, "line_gap_adjust", 0)))
+        self.paragraph_spacing_spaces.setValue(pixels_to_spaces(getattr(rule, "paragraph_gap_adjust", 6)))
         alignment = getattr(rule, "alignment", "center" if getattr(rule, "centered", True) else "left")
         self.alignment.setCurrentIndex(max(0, self.alignment.findData(alignment)))
         self.use_body_margins.setChecked(rule.use_body_margins)
@@ -765,6 +784,7 @@ class NoteRuleEditor(QtWidgets.QWidget):
         self._rule.bold = self.bold_text.isChecked()
         self._rule.text_color = self.text_color.text()
         self._rule.line_gap_adjust = spaces_to_pixels(self.line_spacing_spaces.value())
+        self._rule.paragraph_gap_adjust = spaces_to_pixels(self.paragraph_spacing_spaces.value())
         self._rule.alignment = self.alignment.currentData()
         self._rule.centered = self._rule.alignment == "center"
         self._rule.use_body_margins = self.use_body_margins.isChecked()
