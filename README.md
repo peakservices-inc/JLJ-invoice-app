@@ -186,6 +186,7 @@ py .\jlj_invoice_desktop.py
 
 If needed, click `Settings` to:
 
+- click `?` beside a setting to see what it does
 - change the Tesseract path
 - change OCR DPI and JPEG quality
 - edit rules
@@ -237,7 +238,6 @@ Bottom Note rule options:
 - left, center, or right alignment
 - line spacing between wrapped note lines
 - body-margin alignment
-- bottom margin adjustment
 
 ### App data
 

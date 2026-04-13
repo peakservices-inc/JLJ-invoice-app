@@ -42,12 +42,23 @@ function Get-TesseractInstallerUrl {
 
 function Ensure-TesseractBundle {
     New-Item -ItemType Directory -Force -Path $TesseractBundleDir | Out-Null
+    if ((Test-Path $TesseractBundle) -and ((Get-Item $TesseractBundle).Length -gt 40000000)) {
+        return
+    }
+
     $url = Get-TesseractInstallerUrl
+    $downloadTarget = "$TesseractBundle.download"
+    Remove-Item -LiteralPath $downloadTarget -Force -ErrorAction SilentlyContinue
     Write-Host "Downloading bundled Tesseract installer from $url"
-    & curl.exe -L -A "Mozilla/5.0" $url -o $TesseractBundle
-    if (-not (Test-Path $TesseractBundle)) {
+    & curl.exe --fail -L --retry 5 --retry-delay 2 --retry-all-errors -A "Mozilla/5.0" $url -o $downloadTarget
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $downloadTarget)) {
         throw "Failed to download bundled Tesseract installer."
     }
+    if ((Get-Item $downloadTarget).Length -lt 40000000) {
+        Remove-Item -LiteralPath $downloadTarget -Force -ErrorAction SilentlyContinue
+        throw "Downloaded Tesseract installer looks incomplete."
+    }
+    Move-Item -LiteralPath $downloadTarget -Destination $TesseractBundle -Force
 }
 
 Push-Location $Root

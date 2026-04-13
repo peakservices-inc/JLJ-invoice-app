@@ -912,7 +912,7 @@ def draw_note_block(
 ) -> None:
     draw = ImageDraw.Draw(image)
     image_width, image_height = image.size
-    margin_bottom = max(28, image_height // 28) + note_rule.bottom_margin_adjust
+    margin_bottom = max(28, image_height // 28)
     if note_rule.use_body_margins:
         left_margin, right_margin = estimate_note_margins(lines, image_width, image_height)
     else:

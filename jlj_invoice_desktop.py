@@ -134,6 +134,7 @@ def sanitize_rule(rule: RuleObject) -> RuleObject:
         rule.text_color = safe_text_color(getattr(rule, "text_color", "#000000"))
         if getattr(rule, "alignment", "").lower() not in {"left", "center", "right"}:
             rule.alignment = "center" if getattr(rule, "centered", True) else "left"
+        rule.bottom_margin_adjust = 0
         return rule
     return rule
 
@@ -148,6 +149,156 @@ def spaces_to_pixels(value: int) -> int:
 
 def project_readme_path() -> Path:
     return Path(__file__).resolve().parent / "README.md"
+
+
+SETTING_HELP_TEXTS: Dict[str, tuple[str, str]] = {
+    "output_folder": (
+        "Output Folder",
+        "Choose where the finished PDF files will be saved. The original invoice PDFs are not changed.",
+    ),
+    "tesseract_path": (
+        "OCR Program",
+        "This points to Tesseract, the OCR program that reads invoice text from scanned PDF pages. Most users can leave the detected path alone.",
+    ),
+    "dpi": (
+        "Render DPI",
+        "Render DPI controls how sharply each PDF page is converted into an image before OCR runs.\n\n"
+        "Higher DPI usually helps the app read dates more accurately, but processing takes longer. Lower DPI is faster, but weak or blurry scans may be harder to read.",
+    ),
+    "jpeg_quality": (
+        "JPEG Quality",
+        "JPEG Quality controls how clean the rebuilt PDF pages look after the app adds text.\n\n"
+        "Higher quality keeps scans sharper and creates larger files. Lower quality makes smaller files, but can add blur or compression artifacts.",
+    ),
+    "rule_enabled": (
+        "Turn Rule On",
+        "Turn this on when you want the rule to run during processing. Turn it off to keep the rule saved without applying it to PDFs.",
+    ),
+    "rule_name": (
+        "Rule Name",
+        "This name is only used in the Settings rule list so the rule is easier to recognize. It does not print on the PDF.",
+    ),
+    "due_label_text": (
+        "Text To Place",
+        "This is the label printed for the calculated due date. For example, the default label is Due Date.",
+    ),
+    "due_offset_days": (
+        "Days After Invoice Date",
+        "This controls how many days are added to the invoice date. For example, 30 makes the due date 30 days after the invoice date.",
+    ),
+    "due_detection_mode": (
+        "Find Invoice Date",
+        "Auto detect lets the app choose the best method. Invoice Date label looks for labels like invoice date or inv date. Month name at top looks for top-page dates like March 19, 2026.",
+    ),
+    "due_label_keywords": (
+        "Other Date Labels",
+        "Add comma-separated labels the app should treat as invoice-date labels, such as invoice date, inv date, or bill date.",
+    ),
+    "font_family": (
+        "Font Family",
+        "Choose the font used for the added text. If a font is unsafe or unsupported for PDF output, the app falls back to a safe default.",
+    ),
+    "font_size_adjust": (
+        "Text Size Adjustment",
+        "Use positive numbers to make added text larger and negative numbers to make it smaller. This adjusts the app's estimated default size.",
+    ),
+    "bold_text": (
+        "Bold Text",
+        "Turn this on to make the added rule text bold.",
+    ),
+    "text_color": (
+        "Text Color",
+        "Choose the color used for the added text. You can type a hex color like #000000 or use the Pick button.",
+    ),
+    "due_line_spacing": (
+        "Due Date Line Spacing",
+        "This changes the gap between the due-date label and the calculated date below it.",
+    ),
+    "move_horizontal": (
+        "Move Right Or Left",
+        "Use positive values to move the added text right. Use negative values to move it left.",
+    ),
+    "move_vertical": (
+        "Move Down Or Up",
+        "Use positive values to move the added text down. Use negative values to move it up.",
+    ),
+    "due_mirrored_margin": (
+        "Mirrored Spacing",
+        "This tries to keep the due-date block aligned using spacing similar to the invoice-date area. Turn it off if you want manual positioning to have more control.",
+    ),
+    "note_text": (
+        "Message To Place",
+        "This is the note text printed near the bottom of each processed PDF page.",
+    ),
+    "note_line_spacing": (
+        "Note Line Spacing",
+        "This changes the spacing between wrapped lines in the bottom note.",
+    ),
+    "note_alignment": (
+        "Text Alignment",
+        "Choose whether the bottom note lines align left, center, or right inside the available note area.",
+    ),
+    "note_body_margins": (
+        "Body Margins",
+        "This uses the invoice body's detected left and right margins for the note, which usually makes it line up better with the document.",
+    ),
+}
+
+
+def show_setting_help(parent: QtWidgets.QWidget, help_key: str) -> None:
+    help_text = SETTING_HELP_TEXTS.get(help_key)
+    if help_text is None:
+        return
+
+    title, message = help_text
+    box = QtWidgets.QMessageBox(parent)
+    box.setWindowTitle(f"{title} Help")
+    box.setIcon(QtWidgets.QMessageBox.Information)
+    box.setText(message)
+    box.setStandardButtons(QtWidgets.QMessageBox.Close)
+
+    docs_button = None
+    docs_path = project_readme_path()
+    if docs_path.exists():
+        docs_button = box.addButton("Open Docs", QtWidgets.QMessageBox.ActionRole)
+
+    box.exec()
+
+    if docs_button is not None and box.clickedButton() is docs_button and hasattr(os, "startfile"):
+        os.startfile(str(docs_path))
+
+
+def make_help_button(parent: QtWidgets.QWidget, help_key: str) -> QtWidgets.QToolButton:
+    button = QtWidgets.QToolButton(parent)
+    button.setObjectName("HelpButton")
+    button.setText("?")
+    button.setAutoRaise(False)
+    button.setCursor(QtCore.Qt.PointingHandCursor)
+    button.clicked.connect(lambda *_: show_setting_help(parent, help_key))
+    return button
+
+
+def build_setting_label(text: str, help_key: str, parent: QtWidgets.QWidget) -> QtWidgets.QWidget:
+    container = QtWidgets.QWidget(parent)
+    layout = QtWidgets.QHBoxLayout(container)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(6)
+    layout.addWidget(make_help_button(parent, help_key), 0, QtCore.Qt.AlignVCenter)
+    label = QtWidgets.QLabel(text, container)
+    layout.addWidget(label)
+    layout.addStretch(1)
+    return container
+
+
+def build_setting_control(control: QtWidgets.QWidget, help_key: str, parent: QtWidgets.QWidget) -> QtWidgets.QWidget:
+    container = QtWidgets.QWidget(parent)
+    layout = QtWidgets.QHBoxLayout(container)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(8)
+    layout.addWidget(make_help_button(parent, help_key), 0, QtCore.Qt.AlignVCenter)
+    layout.addWidget(control)
+    layout.addStretch(1)
+    return container
 
 
 class ProcessWorker(QtCore.QObject):
@@ -327,12 +478,12 @@ class DueDateRuleEditor(QtWidgets.QWidget):
         help_label.setWordWrap(True)
         help_label.setObjectName("CardSubtitle")
 
-        basic_form.addRow("", self.enabled)
-        basic_form.addRow("Rule name", self.name_edit)
-        basic_form.addRow("Text to place", self.label_text)
-        basic_form.addRow("Days after invoice date", self.offset_days)
-        basic_form.addRow("How to find the invoice date", self.detection_mode)
-        basic_form.addRow("Other date labels to look for", self.label_keywords)
+        basic_form.addRow("", build_setting_control(self.enabled, "rule_enabled", self))
+        basic_form.addRow(build_setting_label("Rule name", "rule_name", self), self.name_edit)
+        basic_form.addRow(build_setting_label("Text to place", "due_label_text", self), self.label_text)
+        basic_form.addRow(build_setting_label("Days after invoice date", "due_offset_days", self), self.offset_days)
+        basic_form.addRow(build_setting_label("How to find the invoice date", "due_detection_mode", self), self.detection_mode)
+        basic_form.addRow(build_setting_label("Other date labels to look for", "due_label_keywords", self), self.label_keywords)
         basic_form.addRow("", help_label)
 
         advanced_scroll, advanced_page, advanced_form = create_scroll_form_page()
@@ -362,14 +513,14 @@ class DueDateRuleEditor(QtWidgets.QWidget):
         spacing_help.setWordWrap(True)
         spacing_help.setObjectName("CardSubtitle")
 
-        advanced_form.addRow("Font family", self.font_family)
-        advanced_form.addRow("Text size adjustment", self.font_size_adjust)
-        advanced_form.addRow("", self.bold_text)
-        advanced_form.addRow("Text color", self.text_color)
-        advanced_form.addRow("Space between 'Due Date' and the date", self.line_spacing_spaces)
-        advanced_form.addRow("Move right (+) or left (-)", self.horizontal_spaces)
-        advanced_form.addRow("Move down (+) or up (-)", self.vertical_spaces)
-        advanced_form.addRow("", self.mirrored_margin)
+        advanced_form.addRow(build_setting_label("Font family", "font_family", self), self.font_family)
+        advanced_form.addRow(build_setting_label("Text size adjustment", "font_size_adjust", self), self.font_size_adjust)
+        advanced_form.addRow("", build_setting_control(self.bold_text, "bold_text", self))
+        advanced_form.addRow(build_setting_label("Text color", "text_color", self), self.text_color)
+        advanced_form.addRow(build_setting_label("Space between 'Due Date' and the date", "due_line_spacing", self), self.line_spacing_spaces)
+        advanced_form.addRow(build_setting_label("Move right (+) or left (-)", "move_horizontal", self), self.horizontal_spaces)
+        advanced_form.addRow(build_setting_label("Move down (+) or up (-)", "move_vertical", self), self.vertical_spaces)
+        advanced_form.addRow("", build_setting_control(self.mirrored_margin, "due_mirrored_margin", self))
         advanced_form.addRow("", spacing_help)
 
         for widget in [
@@ -504,9 +655,9 @@ class NoteRuleEditor(QtWidgets.QWidget):
         self.note_text = QtWidgets.QPlainTextEdit()
         self.note_text.setMinimumHeight(150)
 
-        basic_form.addRow("", self.enabled)
-        basic_form.addRow("Rule name", self.name_edit)
-        basic_form.addRow("Message to place", self.note_text)
+        basic_form.addRow("", build_setting_control(self.enabled, "rule_enabled", self))
+        basic_form.addRow(build_setting_label("Rule name", "rule_name", self), self.name_edit)
+        basic_form.addRow(build_setting_label("Message to place", "note_text", self), self.note_text)
 
         advanced_scroll, advanced_page, advanced_form = create_scroll_form_page()
 
@@ -532,19 +683,15 @@ class NoteRuleEditor(QtWidgets.QWidget):
         self.vertical_spaces.setRange(-60, 60)
         self.vertical_spaces.setSuffix(" spaces")
         self.vertical_spaces.setSpecialValueText("Default")
-        self.bottom_margin_adjust = QtWidgets.QSpinBox()
-        self.bottom_margin_adjust.setRange(-200, 200)
-
-        advanced_form.addRow("Font family", self.font_family)
-        advanced_form.addRow("Text size adjustment", self.font_size_adjust)
-        advanced_form.addRow("", self.bold_text)
-        advanced_form.addRow("Text color", self.text_color)
-        advanced_form.addRow("Space between note lines", self.line_spacing_spaces)
-        advanced_form.addRow("Text alignment", self.alignment)
-        advanced_form.addRow("", self.use_body_margins)
-        advanced_form.addRow("Move right (+) or left (-)", self.horizontal_spaces)
-        advanced_form.addRow("Move down (+) or up (-)", self.vertical_spaces)
-        advanced_form.addRow("Move higher or lower", self.bottom_margin_adjust)
+        advanced_form.addRow(build_setting_label("Font family", "font_family", self), self.font_family)
+        advanced_form.addRow(build_setting_label("Text size adjustment", "font_size_adjust", self), self.font_size_adjust)
+        advanced_form.addRow("", build_setting_control(self.bold_text, "bold_text", self))
+        advanced_form.addRow(build_setting_label("Text color", "text_color", self), self.text_color)
+        advanced_form.addRow(build_setting_label("Space between note lines", "note_line_spacing", self), self.line_spacing_spaces)
+        advanced_form.addRow(build_setting_label("Text alignment", "note_alignment", self), self.alignment)
+        advanced_form.addRow("", build_setting_control(self.use_body_margins, "note_body_margins", self))
+        advanced_form.addRow(build_setting_label("Move right (+) or left (-)", "move_horizontal", self), self.horizontal_spaces)
+        advanced_form.addRow(build_setting_label("Move down (+) or up (-)", "move_vertical", self), self.vertical_spaces)
 
         for widget in [
             self.name_edit,
@@ -555,7 +702,6 @@ class NoteRuleEditor(QtWidgets.QWidget):
             self.alignment,
             self.horizontal_spaces,
             self.vertical_spaces,
-            self.bottom_margin_adjust,
         ]:
             set_compact_input_height(widget)
 
@@ -574,7 +720,6 @@ class NoteRuleEditor(QtWidgets.QWidget):
         self.use_body_margins.clicked.connect(lambda *_: self.changed.emit())
         self.horizontal_spaces.valueChanged.connect(lambda *_: self.changed.emit())
         self.vertical_spaces.valueChanged.connect(lambda *_: self.changed.emit())
-        self.bottom_margin_adjust.valueChanged.connect(lambda *_: self.changed.emit())
 
         self._rule: Optional[backend.NoteRuleConfig] = None
 
@@ -593,7 +738,6 @@ class NoteRuleEditor(QtWidgets.QWidget):
             QtCore.QSignalBlocker(self.use_body_margins),
             QtCore.QSignalBlocker(self.horizontal_spaces),
             QtCore.QSignalBlocker(self.vertical_spaces),
-            QtCore.QSignalBlocker(self.bottom_margin_adjust),
         ]
         self.enabled.setChecked(rule.enabled)
         self.name_edit.setText(rule.name)
@@ -608,7 +752,6 @@ class NoteRuleEditor(QtWidgets.QWidget):
         self.use_body_margins.setChecked(rule.use_body_margins)
         self.horizontal_spaces.setValue(pixels_to_spaces(getattr(rule, "x_offset", 0)))
         self.vertical_spaces.setValue(pixels_to_spaces(getattr(rule, "y_offset", 0)))
-        self.bottom_margin_adjust.setValue(rule.bottom_margin_adjust)
         del blockers
 
     def apply_changes(self) -> None:
@@ -627,7 +770,7 @@ class NoteRuleEditor(QtWidgets.QWidget):
         self._rule.use_body_margins = self.use_body_margins.isChecked()
         self._rule.x_offset = spaces_to_pixels(self.horizontal_spaces.value())
         self._rule.y_offset = spaces_to_pixels(self.vertical_spaces.value())
-        self._rule.bottom_margin_adjust = self.bottom_margin_adjust.value()
+        self._rule.bottom_margin_adjust = 0
 
 
 @dataclass(frozen=True)
@@ -882,7 +1025,7 @@ class MainWindow(QtWidgets.QMainWindow):
         output_dir_row.addWidget(self.output_dir_button)
         output_dir_wrap = QtWidgets.QWidget()
         output_dir_wrap.setLayout(output_dir_row)
-        output_form.addRow("Save Processed Files To", output_dir_wrap)
+        output_form.addRow(self._build_setting_label("Save Processed Files To", "output_folder"), output_dir_wrap)
         output_card.body_layout.addLayout(output_form)
 
         action_card = CardFrame(
@@ -957,63 +1100,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.due_editor.changed.connect(self._sync_active_rule)
         self.note_editor.changed.connect(self._sync_active_rule)
 
-    def _build_setting_label(self, text: str, help_key: Optional[str] = None) -> QtWidgets.QWidget:
-        container = QtWidgets.QWidget()
-        layout = QtWidgets.QHBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
-
-        label = QtWidgets.QLabel(text)
-        layout.addWidget(label)
-
-        if help_key:
-            button = QtWidgets.QToolButton()
-            button.setObjectName("HelpButton")
-            button.setText("?")
-            button.setAutoRaise(False)
-            button.setCursor(QtCore.Qt.PointingHandCursor)
-            button.clicked.connect(lambda *_: self._show_setting_help(help_key))
-            layout.addWidget(button, 0, QtCore.Qt.AlignVCenter)
-
-        layout.addStretch(1)
-        return container
+    def _build_setting_label(self, text: str, help_key: str) -> QtWidgets.QWidget:
+        return build_setting_label(text, help_key, self)
 
     def _show_setting_help(self, help_key: str) -> None:
-        docs_path = project_readme_path()
-        if help_key == "dpi":
-            title = "Render DPI Help"
-            message = (
-                "Render DPI controls how sharply each PDF page is converted into an image before OCR runs.\n\n"
-                "Higher DPI usually helps Tesseract read dates more accurately and can improve rule placement, "
-                "especially on faint or blurry scans. The tradeoff is slower processing and more memory use.\n\n"
-                "Lower DPI is faster, but OCR can miss text or place rules less precisely on poor-quality scans.\n\n"
-                "This setting changes OCR quality and placement accuracy. It does not change the rule logic itself."
-            )
-        elif help_key == "jpeg_quality":
-            title = "JPEG Quality Help"
-            message = (
-                "JPEG Quality controls how clean the rebuilt PDF pages look after the rules are drawn.\n\n"
-                "Higher quality keeps the original scan and added rule text sharper, but creates larger output files.\n\n"
-                "Lower quality makes smaller files, but can introduce blur or compression artifacts that affect how natural "
-                "the invoice, due date, and note appear."
-            )
-        else:
-            return
-
-        box = QtWidgets.QMessageBox(self.settings_dialog)
-        box.setWindowTitle(title)
-        box.setIcon(QtWidgets.QMessageBox.Information)
-        box.setText(message)
-        box.setStandardButtons(QtWidgets.QMessageBox.Close)
-
-        docs_button = None
-        if docs_path.exists():
-            docs_button = box.addButton("Open Docs", QtWidgets.QMessageBox.ActionRole)
-
-        box.exec()
-
-        if docs_button is not None and box.clickedButton() is docs_button and hasattr(os, "startfile"):
-            os.startfile(str(docs_path))
+        show_setting_help(self, help_key)
 
     def _build_settings_dialog(self) -> None:
         self.settings_dialog = QtWidgets.QDialog(self)
@@ -1068,7 +1159,7 @@ class MainWindow(QtWidgets.QMainWindow):
         set_compact_input_height(self.dpi_spin)
         set_compact_input_height(self.quality_spin)
 
-        processing_form.addRow(self._build_setting_label("OCR Program (Tesseract)"), tesseract_wrap)
+        processing_form.addRow(self._build_setting_label("OCR Program (Tesseract)", "tesseract_path"), tesseract_wrap)
         processing_form.addRow(self._build_setting_label("Render DPI", "dpi"), self.dpi_spin)
         processing_form.addRow(self._build_setting_label("JPEG Quality", "jpeg_quality"), self.quality_spin)
         processing_card.body_layout.addLayout(processing_form)
