@@ -111,6 +111,78 @@ def set_compact_input_height(widget: QtWidgets.QWidget, min_height: int = 32) ->
     widget.setMinimumHeight(min_height)
 
 
+class ArrowSpinBox(QtWidgets.QSpinBox):
+    """Spin box that keeps arrow buttons visible under the app stylesheet."""
+
+    def paintEvent(self, event: QtGui.QPaintEvent) -> None:
+        super().paintEvent(event)
+        if self.buttonSymbols() != QtWidgets.QAbstractSpinBox.UpDownArrows:
+            return
+
+        option = QtWidgets.QStyleOptionSpinBox()
+        self.initStyleOption(option)
+        up_rect = self.style().subControlRect(
+            QtWidgets.QStyle.CC_SpinBox,
+            option,
+            QtWidgets.QStyle.SC_SpinBoxUp,
+            self,
+        )
+        down_rect = self.style().subControlRect(
+            QtWidgets.QStyle.CC_SpinBox,
+            option,
+            QtWidgets.QStyle.SC_SpinBoxDown,
+            self,
+        )
+        if not up_rect.isValid() or up_rect.isNull() or not down_rect.isValid() or down_rect.isNull():
+            button_width = 24
+            half_height = max(1, self.height() // 2)
+            button_left = max(0, self.width() - button_width)
+            up_rect = QtCore.QRect(button_left, 1, button_width - 1, half_height - 1)
+            down_rect = QtCore.QRect(
+                button_left,
+                half_height,
+                button_width - 1,
+                max(1, self.height() - half_height - 1),
+            )
+
+        painter = QtGui.QPainter(self)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        arrow_color = QtGui.QColor("#1f5a92" if self.isEnabled() else "#9aa7b5")
+        painter.setPen(QtCore.Qt.NoPen)
+        painter.setBrush(arrow_color)
+        self._paint_arrow(painter, up_rect, points_up=True)
+        self._paint_arrow(painter, down_rect, points_up=False)
+
+    @staticmethod
+    def _paint_arrow(painter: QtGui.QPainter, rect: QtCore.QRect, points_up: bool) -> None:
+        if rect.width() < 6 or rect.height() < 6:
+            return
+
+        center = QtCore.QPointF(rect.center())
+        arrow_width = min(8.0, rect.width() * 0.42)
+        arrow_height = min(5.0, rect.height() * 0.38)
+        half_width = arrow_width / 2
+        half_height = arrow_height / 2
+
+        if points_up:
+            polygon = QtGui.QPolygonF(
+                [
+                    QtCore.QPointF(center.x(), center.y() - half_height),
+                    QtCore.QPointF(center.x() - half_width, center.y() + half_height),
+                    QtCore.QPointF(center.x() + half_width, center.y() + half_height),
+                ]
+            )
+        else:
+            polygon = QtGui.QPolygonF(
+                [
+                    QtCore.QPointF(center.x() - half_width, center.y() - half_height),
+                    QtCore.QPointF(center.x() + half_width, center.y() - half_height),
+                    QtCore.QPointF(center.x(), center.y() + half_height),
+                ]
+            )
+        painter.drawPolygon(polygon)
+
+
 def safe_font_family_name(family: str, fallback: str = "Arial") -> str:
     normalized = "".join(ch for ch in family.lower() if ch.isalnum())
     if not normalized:
@@ -463,7 +535,7 @@ class DueDateRuleEditor(QtWidgets.QWidget):
         self.enabled = QtWidgets.QCheckBox("Turn this rule on")
         self.name_edit = QtWidgets.QLineEdit()
         self.label_text = QtWidgets.QLineEdit()
-        self.offset_days = QtWidgets.QSpinBox()
+        self.offset_days = ArrowSpinBox()
         self.offset_days.setRange(1, 365)
         self.offset_days.setValue(30)
 
@@ -494,19 +566,19 @@ class DueDateRuleEditor(QtWidgets.QWidget):
         advanced_scroll, advanced_page, advanced_form = create_scroll_form_page()
 
         self.font_family = QtWidgets.QFontComboBox()
-        self.font_size_adjust = QtWidgets.QSpinBox()
+        self.font_size_adjust = ArrowSpinBox()
         self.font_size_adjust.setRange(FONT_ADJUST_MIN, FONT_ADJUST_MAX)
         self.bold_text = QtWidgets.QCheckBox("Make the due date text bold")
         self.text_color = ColorField()
-        self.line_spacing_spaces = QtWidgets.QSpinBox()
+        self.line_spacing_spaces = ArrowSpinBox()
         self.line_spacing_spaces.setRange(-10, 10)
         self.line_spacing_spaces.setSuffix(" spaces")
         self.line_spacing_spaces.setSpecialValueText("Default")
-        self.horizontal_spaces = QtWidgets.QSpinBox()
+        self.horizontal_spaces = ArrowSpinBox()
         self.horizontal_spaces.setRange(-60, 60)
         self.horizontal_spaces.setSuffix(" spaces")
         self.horizontal_spaces.setSpecialValueText("Default")
-        self.vertical_spaces = QtWidgets.QSpinBox()
+        self.vertical_spaces = ArrowSpinBox()
         self.vertical_spaces.setRange(-60, 60)
         self.vertical_spaces.setSuffix(" spaces")
         self.vertical_spaces.setSpecialValueText("Default")
@@ -673,15 +745,15 @@ class NoteRuleEditor(QtWidgets.QWidget):
         advanced_scroll, advanced_page, advanced_form = create_scroll_form_page()
 
         self.font_family = QtWidgets.QFontComboBox()
-        self.font_size_adjust = QtWidgets.QSpinBox()
+        self.font_size_adjust = ArrowSpinBox()
         self.font_size_adjust.setRange(FONT_ADJUST_MIN, FONT_ADJUST_MAX)
         self.bold_text = QtWidgets.QCheckBox("Make the note text bold")
         self.text_color = ColorField()
-        self.line_spacing_spaces = QtWidgets.QSpinBox()
+        self.line_spacing_spaces = ArrowSpinBox()
         self.line_spacing_spaces.setRange(-10, 20)
         self.line_spacing_spaces.setSuffix(" spaces")
         self.line_spacing_spaces.setSpecialValueText("Default")
-        self.paragraph_spacing_spaces = QtWidgets.QSpinBox()
+        self.paragraph_spacing_spaces = ArrowSpinBox()
         self.paragraph_spacing_spaces.setRange(-10, 30)
         self.paragraph_spacing_spaces.setSuffix(" spaces")
         self.alignment = QtWidgets.QComboBox()
@@ -689,11 +761,11 @@ class NoteRuleEditor(QtWidgets.QWidget):
         self.alignment.addItem("Center", "center")
         self.alignment.addItem("Right", "right")
         self.use_body_margins = QtWidgets.QCheckBox("Use the same left and right margins as the body text")
-        self.horizontal_spaces = QtWidgets.QSpinBox()
+        self.horizontal_spaces = ArrowSpinBox()
         self.horizontal_spaces.setRange(-60, 60)
         self.horizontal_spaces.setSuffix(" spaces")
         self.horizontal_spaces.setSpecialValueText("Default")
-        self.vertical_spaces = QtWidgets.QSpinBox()
+        self.vertical_spaces = ArrowSpinBox()
         self.vertical_spaces.setRange(-60, 60)
         self.vertical_spaces.setSuffix(" spaces")
         self.vertical_spaces.setSpecialValueText("Default")
@@ -1168,10 +1240,10 @@ class MainWindow(QtWidgets.QMainWindow):
         tesseract_wrap = QtWidgets.QWidget()
         tesseract_wrap.setLayout(tesseract_row)
 
-        self.dpi_spin = QtWidgets.QSpinBox()
+        self.dpi_spin = ArrowSpinBox()
         self.dpi_spin.setRange(150, 600)
         self.dpi_spin.setValue(300)
-        self.quality_spin = QtWidgets.QSpinBox()
+        self.quality_spin = ArrowSpinBox()
         self.quality_spin.setRange(50, 100)
         self.quality_spin.setValue(95)
 
